@@ -1,0 +1,30 @@
+[Unit]
+Description=Claude Code Proxy - Use Anthropic clients with OpenAI/Gemini models
+Documentation=https://github.com/1rgs/claude-code-proxy
+After=network.target
+
+[Service]
+Type=simple
+ExecStartPre=/bin/mkdir -p %h/.config/claude-code-proxy
+ExecStart=/usr/bin/python3 -m uvicorn server:app --host 0.0.0.0 --port 8082
+WorkingDirectory=%h/.local/share/claude-code-proxy
+Restart=always
+RestartSec=10
+
+# Environment
+Environment="HOME=%h"
+EnvironmentFile=-%h/.config/claude-code-proxy/env
+
+# Security hardening
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=%h/.cache %h/.config/claude-code-proxy
+
+# Resource limits
+MemoryLimit=1G
+CPUQuota=80%
+
+[Install]
+WantedBy=default.target
