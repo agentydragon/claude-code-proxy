@@ -29,23 +29,10 @@ A proxy server that lets you use Anthropic clients with Gemini or OpenAI models 
    ```
    *(`uv` will handle dependencies based on `pyproject.toml` when you run the server)*
 
-3. **Configure Environment Variables**:
-   Copy the example environment file:
-   ```bash
-   cp .env.example .env
-   ```
-   Edit `.env` and fill in your API keys and model configurations:
-
-   *   `ANTHROPIC_API_KEY`: (Optional) Needed only if proxying *to* Anthropic models.
-   *   `OPENAI_API_KEY`: Your OpenAI API key (Required if using the default OpenAI preference or as fallback).
-   *   `GEMINI_API_KEY`: Your Google AI Studio (Gemini) API key (Required if PREFERRED_PROVIDER=google).
-   *   `PREFERRED_PROVIDER` (Optional): Set to `openai` (default) or `google`. This determines the primary backend for mapping `haiku`/`sonnet`.
-   *   `BIG_MODEL` (Optional): The model to map `sonnet` requests to. Defaults to `gpt-4.1` (if `PREFERRED_PROVIDER=openai`) or `gemini-2.5-pro-preview-03-25`.
-   *   `SMALL_MODEL` (Optional): The model to map `haiku` requests to. Defaults to `gpt-4.1-mini` (if `PREFERRED_PROVIDER=openai`) or `gemini-2.0-flash`.
-
-   **Mapping Logic:**
-   - If `PREFERRED_PROVIDER=openai` (default), `haiku`/`sonnet` map to `SMALL_MODEL`/`BIG_MODEL` prefixed with `openai/`.
-   - If `PREFERRED_PROVIDER=google`, `haiku`/`sonnet` map to `SMALL_MODEL`/`BIG_MODEL` prefixed with `gemini/` *if* those models are in the server's known `GEMINI_MODELS` list (otherwise falls back to OpenAI mapping).
+3. **Configure your proxy**: 
+   Set up your configuration file following the Configuration section below. You can use either:
+   - A `config.toml` file (recommended) - see the Configuration section
+   - Environment variables as fallback
 
 4. **Run the server**:
    ```bash
@@ -67,9 +54,150 @@ A proxy server that lets you use Anthropic clients with Gemini or OpenAI models 
 
 3. **That's it!** Your Claude Code client will now use the configured backend models (defaulting to Gemini) through the proxy. 🎯
 
+## Configuration 🔧
+
+### Configuration File Location
+
+The proxy looks for `config.toml` in the following locations (in order):
+
+1. **XDG Config Directory** (recommended):
+   - Linux: `~/.config/claude-code-proxy/config.toml`
+   - macOS: `~/Library/Application Support/claude-code-proxy/config.toml`
+   - Windows: `%APPDATA%\claude-code-proxy\config.toml`
+
+2. **Legacy Location**: `~/.config/claude-code-proxy/config.toml`
+
+### Configuration Setup
+
+1. Copy the example configuration:
+   ```bash
+   mkdir -p ~/.config/claude-code-proxy
+   cp config.example.toml ~/.config/claude-code-proxy/config.toml
+   ```
+
+2. Edit the configuration with your API keys:
+   ```bash
+   $EDITOR ~/.config/claude-code-proxy/config.toml
+   ```
+
+### Configuration Options
+
+#### API Keys
+```toml
+anthropic_api_key = "sk-ant-..."  # Optional if not using Anthropic fallback
+openai_api_key = "sk-proj-..."    # Required for OpenAI models
+gemini_api_key = "AI..."          # Required for Gemini models
+```
+
+#### Model Mapping
+```toml
+preferred_provider = "openai"   # Default provider: "openai" or "google"
+big_model = "gpt-4o"           # Model for complex requests (sonnet, opus)
+small_model = "gpt-4o-mini"    # Model for simple requests (haiku)
+```
+
+#### Server Settings
+```toml
+host = "0.0.0.0"    # Listen address
+port = 8082         # Listen port
+log_level = "INFO"  # Logging level: DEBUG, INFO, WARNING, ERROR
+```
+
+#### Custom Model Mappings
+
+Map specific model patterns to different models:
+
+```toml
+[[custom_mappings]]
+pattern = "opus"              # Match "opus" in model name
+target_model = "gpt-4o"       # Map to this model
+target_provider = "openai"    # Use this provider
+
+[[custom_mappings]]
+pattern = "claude-3.5-sonnet"
+target_model = "gpt-4o"
+target_provider = "openai"
+```
+
+### Environment Variables
+
+Environment variables can be used as fallback when not set in config:
+
+- `ANTHROPIC_API_KEY`
+- `OPENAI_API_KEY`
+- `GEMINI_API_KEY`
+- `PREFERRED_PROVIDER`
+- `BIG_MODEL`
+- `SMALL_MODEL`
+- `PROXY_HOST`
+- `PROXY_PORT`
+- `LOG_LEVEL`
+
+### Example Configurations
+
+#### Using OpenAI for everything:
+```toml
+openai_api_key = "sk-proj-..."
+preferred_provider = "openai"
+big_model = "gpt-4o"
+small_model = "gpt-4o-mini"
+```
+
+#### Using Gemini for everything:
+```toml
+gemini_api_key = "AI..."
+preferred_provider = "google"
+big_model = "gemini-1.5-pro"
+small_model = "gemini-1.5-flash"
+```
+
+#### Mixed providers with custom mappings:
+```toml
+openai_api_key = "sk-proj-..."
+gemini_api_key = "AI..."
+preferred_provider = "openai"
+big_model = "gpt-4o"
+small_model = "gemini-1.5-flash"  # Use Gemini for small models
+
+[[custom_mappings]]
+pattern = "claude-3-opus"
+target_model = "gemini-1.5-pro"
+target_provider = "google"
+```
+
+### Troubleshooting
+
+#### Config File Errors
+
+If your config file has syntax errors, the proxy will refuse to start with a clear error message. Common issues:
+
+- Missing quotes around strings
+- Invalid TOML syntax
+- Missing required fields
+
+#### Testing Your Config
+
+Run the proxy with debug logging to see model mappings:
+
+```bash
+LOG_LEVEL=DEBUG python server.py
+```
+
+#### Validating TOML Syntax
+
+You can validate your TOML file online at https://www.toml-lint.com/ or use:
+
+```bash
+python -c "import tomli; tomli.load(open('config.toml', 'rb'))"
+```
+
 ## Model Mapping 🗺️
 
-The proxy automatically maps Claude models to either OpenAI or Gemini models based on the configured model:
+The proxy automatically maps Anthropic model names to your configured providers:
+
+1. **Haiku models** → `small_model`
+2. **Sonnet/Opus models** → `big_model`
+3. **Custom mappings** take precedence over default rules
 
 | Claude Model | Default Mapping | When BIG_MODEL/SMALL_MODEL is a Gemini model |
 |--------------|--------------|---------------------------|
@@ -111,35 +239,9 @@ For example:
 
 ### Customizing Model Mapping
 
-Control the mapping using environment variables in your `.env` file or directly:
-
-**Example 1: Default (Use OpenAI)**
-No changes needed in `.env` beyond API keys, or ensure:
-```dotenv
-OPENAI_API_KEY="your-openai-key"
-GEMINI_API_KEY="your-google-key" # Needed if PREFERRED_PROVIDER=google
-# PREFERRED_PROVIDER="openai" # Optional, it's the default
-# BIG_MODEL="gpt-4.1" # Optional, it's the default
-# SMALL_MODEL="gpt-4.1-mini" # Optional, it's the default
-```
-
-**Example 2: Prefer Google**
-```dotenv
-GEMINI_API_KEY="your-google-key"
-OPENAI_API_KEY="your-openai-key" # Needed for fallback
-PREFERRED_PROVIDER="google"
-# BIG_MODEL="gemini-2.5-pro-preview-03-25" # Optional, it's the default for Google pref
-# SMALL_MODEL="gemini-2.0-flash" # Optional, it's the default for Google pref
-```
-
-**Example 3: Use Specific OpenAI Models**
-```dotenv
-OPENAI_API_KEY="your-openai-key"
-GEMINI_API_KEY="your-google-key"
-PREFERRED_PROVIDER="openai"
-BIG_MODEL="gpt-4o" # Example specific model
-SMALL_MODEL="gpt-4o-mini" # Example specific model
-```
+See the Configuration section above for detailed instructions on customizing model mappings using either:
+- The `config.toml` file (recommended)
+- Environment variables as fallback
 
 ## How It Works 🧩
 

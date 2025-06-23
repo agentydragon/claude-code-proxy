@@ -1,0 +1,57 @@
+# Claude Code Proxy Configuration
+# This file should be placed at:
+# - Linux/Mac: ~/.config/claude-code-proxy/config.toml
+# - Windows: %APPDATA%/claude-code-proxy/config.toml
+
+# API Keys
+anthropic_api_key = "sk-ant-api03-xxx"
+openai_api_key = "sk-proj-xxx"
+gemini_api_key = "AIxxx"
+
+# Provider Settings
+preferred_provider = "openai"  # Options: openai, google
+big_model = "gpt-4o"           # Model for complex requests (sonnet, opus)
+small_model = "gpt-4o-mini"    # Model for simple requests (haiku)
+
+# Server Settings
+host = "0.0.0.0"
+port = 8082
+log_level = "INFO"  # Options: DEBUG, INFO, WARNING, ERROR
+
+# Available Models
+openai_models = [
+    "gpt-4o",
+    "gpt-4o-mini",
+    "gpt-4-turbo",
+    "gpt-4-turbo-preview",
+    "gpt-4",
+    "gpt-3.5-turbo",
+    "o1",
+    "o1-mini",
+    "o1-preview",
+    "o3-mini"
+]
+
+gemini_models = [
+    "gemini-2.0-flash",
+    "gemini-1.5-pro",
+    "gemini-1.5-flash",
+    "gemini-1.0-pro"
+]
+
+# Custom Model Mappings
+# Map specific model patterns to target models
+[[custom_mappings]]
+pattern = "opus"
+target_model = "gpt-4o"
+target_provider = "openai"
+
+[[custom_mappings]]
+pattern = "claude-3"
+target_model = "gpt-4-turbo"
+target_provider = "openai"
+
+[[custom_mappings]]
+pattern = "sonnet-3.5"
+target_model = "gpt-4o"
+target_provider = "openai"

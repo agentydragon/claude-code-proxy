@@ -36,3 +36,7 @@ ENV/
 .vscode/
 *.swp
 *.swo
+
+# References
+references/
+^references/fetch.sh

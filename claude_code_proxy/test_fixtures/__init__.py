@@ -1,0 +1,1 @@
+"""Test fixtures for Anthropic <-> OpenAI API conversion testing."""
