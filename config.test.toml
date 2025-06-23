@@ -1,0 +1,4 @@
+big_model = "o3"
+small_model = "o4-mini"
+
+openai_models = ["o3", "o4-mini"]
