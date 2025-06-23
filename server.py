@@ -1312,7 +1312,19 @@ async def create_message(
         # Check for LiteLLM-specific attributes
         for attr in ['message', 'status_code', 'response', 'llm_provider', 'model']:
             if hasattr(e, attr):
-                error_details[attr] = getattr(e, attr)
+                value = getattr(e, attr)
+                # Handle Response objects specially
+                if attr == 'response' and hasattr(value, '__dict__'):
+                    # Try to extract useful info from Response object
+                    try:
+                        error_details[attr] = {
+                            'status_code': getattr(value, 'status_code', None),
+                            'text': getattr(value, 'text', str(value))[:500]  # Limit text length
+                        }
+                    except:
+                        error_details[attr] = str(value)[:500]
+                else:
+                    error_details[attr] = value
         
         # Check for additional exception details in dictionaries
         if hasattr(e, '__dict__'):
