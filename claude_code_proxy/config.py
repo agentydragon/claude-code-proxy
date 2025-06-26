@@ -2,6 +2,7 @@
 import os
 import sys
 from pathlib import Path
+from enum import Enum
 
 import platformdirs
 from dotenv import load_dotenv
@@ -10,6 +11,19 @@ from pydantic import BaseModel, Field, validator
 load_dotenv()
 
 import tomli as tomllib
+
+
+class ReasoningEffort(str, Enum):
+    LOW = "low"
+    MEDIUM = "medium"
+    HIGH = "high"
+
+
+class ReasoningSummary(str, Enum):
+    AUTO = "auto"
+    CONCISE = "concise"
+    DETAILED = "detailed"
+    NONE = "none"
 
 
 class ModelMapping(BaseModel):
@@ -29,6 +43,10 @@ class ProxyConfig(BaseModel):
     host: str = Field("0.0.0.0", description="Host to bind to")
     port: int = Field(8082, description="Port to listen on")
     log_level: str = Field("WARNING", description="Logging level: DEBUG, INFO, WARNING, ERROR")
+    
+    # Reasoning model settings
+    reasoning_effort: ReasoningEffort = Field(ReasoningEffort.MEDIUM, description="Reasoning effort for o1/o3 models")
+    reasoning_summary: ReasoningSummary = Field(ReasoningSummary.AUTO, description="Reasoning summary type")
 
     @validator('log_level')
     def validate_log_level(cls, v):

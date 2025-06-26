@@ -138,6 +138,14 @@ def anthropic_to_openai_request(anthropic_req: Dict[str, Any]) -> Dict[str, Any]
         openai_req["metadata"] = {}
         if "user_id" in anthropic_req["metadata"]:
             openai_req["user"] = anthropic_req["metadata"]["user_id"]
+    
+    # Enable reasoning output for o1/o3 models and codex
+    if openai_model in ["o1", "o1-mini", "o3", "o3-mini", "codex-mini-latest"]:
+        # Request reasoning output from config
+        openai_req["reasoning"] = {
+            "effort": CONFIG.reasoning_effort.value,    # low, medium, high
+            "summary": CONFIG.reasoning_summary.value   # auto, concise, detailed, none
+        }
 
     return openai_req
 
@@ -196,9 +204,11 @@ def openai_to_anthropic_response(openai_resp: Dict[str, Any]) -> Dict[str, Any]:
             )
         elif item.get("type") == "reasoning":
             # Map OpenAI reasoning to Anthropic thinking blocks
+            reasoning_content = item.get("content", "")
+            logger.info(f"[REASONING BLOCK] Received from OpenAI: {reasoning_content[:200]}{'...' if len(str(reasoning_content)) > 200 else ''}")
             anthropic_resp["content"].append({
                 "type": "thinking",
-                "text": item.get("content", "")
+                "text": reasoning_content
             })
 
     # Convert usage
@@ -335,7 +345,8 @@ def _convert_message_to_input(msg: Dict[str, Any]) -> Optional[Dict[str, Any]]:
 
         elif block_type == "thinking":
             # Skip thinking blocks for now - OpenAI doesn't support reasoning in input
-            logger.debug("Skipping thinking block in input message")
+            thinking_text = block.get("text", "")
+            logger.info(f"[THINKING FILTERED] Removing from input: {thinking_text[:200]}{'...' if len(thinking_text) > 200 else ''}")
             continue
 
         else:

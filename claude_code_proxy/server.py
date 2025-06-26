@@ -45,6 +45,12 @@ conversation_tracking_log = log_dir / "conversation_tracking.jsonl"
 # Store: conversation_id -> {"messages": list, "last_response": dict, "message_count": int}
 conversation_cache = {}
 
+def _count_thinking_blocks(messages: list) -> int:
+    """Count thinking blocks in a list of messages."""
+    return sum(1 for msg in messages 
+               for block in (msg.get("content", []) if isinstance(msg.get("content"), list) else []) 
+               if isinstance(block, dict) and block.get("type") == "thinking")
+
 def _messages_equal_ignoring_thinking(msg1: dict, msg2: dict) -> bool:
     """Compare two messages, ignoring thinking blocks."""
     if msg1.get("role") != msg2.get("role"):
@@ -327,27 +333,44 @@ async def handle_anthropic(anthropic_req, request_headers=None):
                     has_reasoning = True
                     break
     
-    # Detect if this could be an append (same conversation, just adding new messages)
-    if conversation_id in conversation_cache and len(messages) > 0:
-        cached_data = conversation_cache[conversation_id]
-        cached_messages = cached_data.get("messages", [])
-        
-        # Check if current messages start with cached messages (append scenario)
-        if len(messages) >= len(cached_messages):
-            # Compare message content (excluding thinking blocks for comparison)
-            is_append = True
-            for i, cached_msg in enumerate(cached_messages):
-                if i >= len(messages):
-                    is_append = False
-                    break
-                    
-                # Compare messages, ignoring thinking blocks
-                if not _messages_equal_ignoring_thinking(messages[i], cached_msg):
-                    is_append = False
-                    break
+    # Detect if this could be an append by checking message content across all conversations
+    if len(messages) > 1:  # Only check for appends if we have multiple messages
+        # First try the same conversation ID for efficiency
+        if conversation_id in conversation_cache:
+            cached_data = conversation_cache[conversation_id]
+            cached_messages = cached_data.get("messages", [])
             
-            if is_append:
-                append_from_index = len(cached_messages)
+            if len(messages) >= len(cached_messages) and len(cached_messages) > 0:
+                # Compare message content (excluding thinking blocks for comparison)
+                is_append = True
+                for i, cached_msg in enumerate(cached_messages):
+                    if not _messages_equal_ignoring_thinking(messages[i], cached_msg):
+                        is_append = False
+                        break
+                
+                if is_append:
+                    append_from_index = len(cached_messages)
+        
+        # If not found with same ID, check all cached conversations for matching content
+        if not is_append:
+            for cached_conv_id, cached_data in conversation_cache.items():
+                cached_messages = cached_data.get("messages", [])
+                
+                if len(messages) >= len(cached_messages) and len(cached_messages) > 0:
+                    # Check if messages match
+                    matches = True
+                    for i, cached_msg in enumerate(cached_messages):
+                        if not _messages_equal_ignoring_thinking(messages[i], cached_msg):
+                            matches = False
+                            break
+                    
+                    if matches:
+                        is_append = True
+                        append_from_index = len(cached_messages)
+                        # Update conversation_id to the matched one for consistency
+                        logger.info(f"Detected append by content match: new ID {conversation_id} matches cached {cached_conv_id}")
+                        conversation_id = cached_conv_id
+                        break
     
     # Check if previous conversation had reasoning filtered
     previous_had_reasoning_filtered = False
@@ -374,10 +397,11 @@ async def handle_anthropic(anthropic_req, request_headers=None):
     })
     
     if has_reasoning and is_append:
+        reasoning_count = _count_thinking_blocks(messages)
         if previous_had_reasoning_filtered:
-            logger.info(f"Request {request_id} appending to filtered conversation - preserving reasoning in new messages")
+            logger.info(f"[REASONING PRESERVED] Request {request_id} appending to filtered conversation - preserving {reasoning_count} reasoning blocks in new messages")
         else:
-            logger.info(f"Request {request_id} has reasoning and can use append API - preserving reasoning blocks")
+            logger.info(f"[REASONING PRESERVED] Request {request_id} has reasoning and can use append API - preserving {reasoning_count} reasoning blocks")
         # For append scenario, we can keep the reasoning blocks
         # Example flow:
         # Original: u[r] a u[r] a u[r] a -> Filtered: u a u a u a
@@ -386,10 +410,10 @@ async def handle_anthropic(anthropic_req, request_headers=None):
         anthropic_req_for_append = copy.deepcopy(anthropic_req)
         anthropic_req_for_append["messages"] = messages[append_from_index:]
         openai_request = anthropic_to_openai_request(anthropic_req_for_append)
-        # Mark this as an append request (if OpenAI supports it)
-        openai_request["append"] = True  # This would need OpenAI API support
+        # Note: We're sending only new messages but OpenAI doesn't have explicit append API
     elif has_reasoning:
-        logger.warning(f"Request {request_id} has reasoning blocks that will be filtered out (new conversation)")
+        reasoning_count = _count_thinking_blocks(messages)
+        logger.warning(f"[REASONING FILTERED] Request {request_id} has {reasoning_count} reasoning blocks that will be filtered out (new conversation)")
         # Need to filter out reasoning blocks since this is a new conversation
         openai_request = anthropic_to_openai_request(anthropic_req)
     else:
