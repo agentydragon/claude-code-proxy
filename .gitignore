@@ -41,3 +41,7 @@ ENV/
 references/*
 !references/fetch.sh
 !references/fetch_openai_docs.py
+
+# Test outputs
+test_output/
+test_fixtures_output/
