@@ -38,5 +38,5 @@ ENV/
 *.swo
 
 # References
-references/
-^references/fetch.sh
+references/*
+!references/fetch.sh

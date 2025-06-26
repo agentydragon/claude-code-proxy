@@ -7,43 +7,62 @@ from typing import Any, Dict, List, Optional, Union
 
 logger = logging.getLogger(__name__)
 
+# Model mapping
+ANTHROPIC_TO_OPENAI_MODEL = {
+  "claude-opus-4-20250514": "o3",
+    "claude-sonnet-4-20250514": "o4-mini",
+#    "claude-3-5-haiku-20241022": "gpt-4o-mini",
+#    "claude-3-5-sonnet-20241022": "gpt-4o-mini",
+#    "claude-3-opus-20240229": "gpt-4o-mini",
+}
 
 def anthropic_to_openai_request(anthropic_req: Dict[str, Any]) -> Dict[str, Any]:
     """Convert Anthropic Messages API request to OpenAI Responses API format."""
-    openai_req = {
-        "model": anthropic_req["model"],
-    }
-    
+    # Map model
+    anthropic_model = anthropic_req["model"]
+    openai_model = ANTHROPIC_TO_OPENAI_MODEL.get(anthropic_model, "gpt-4o-mini")
+    openai_req = {"model": openai_model}
+
     # Build input array
     input_items = []
     
     # Add system message if present
-    if "system" in anthropic_req:
-        system_content = _extract_text_content(anthropic_req["system"])
-        if system_content:
-            input_items.append({
-                "role": "developer",  # OpenAI equivalent to Anthropic "system"
-                "content": system_content
-            })
+    if "system" in anthropic_req and (system_content := _extract_text_content(anthropic_req["system"])):
+        input_items.append({
+            "role": "developer",  # OpenAI equivalent to Anthropic "system"
+            "content": system_content
+        })
     
     # Convert messages to input items
     for msg in anthropic_req.get("messages", []):
-        # Handle messages that contain tool results
-        if _contains_tool_results(msg):
+        # Handle messages that contain tool results or tool use
+        if _contains_tool_results(msg) or _contains_tool_use(msg):
             # Split into separate items
-            items = _split_tool_message(msg)
-            input_items.extend(items)
+            input_items.extend(_split_tool_message(msg))
         else:
             # Convert regular message
-            item = _convert_message_to_input(msg)
-            if item:
+            if (item := _convert_message_to_input(msg)):
                 input_items.append(item)
-    
+            else:
+                logger.warning(f"Skipping unsupported message format: {msg}")
+
     openai_req["input"] = input_items
-    
+    # 2025-06-23 22:01:25,358 - INFO - Received Anthropic request for model: claude-3-5-haiku-20241022
+    # 2025-06-23 22:01:25,358 - DEBUG - OpenAI request: {"model": "gpt-4o-mini", "input": [{"role": "user", "content": "quota"}], "max_output_tokens": 1, "metadata": {}, "user": "f35dc80505901d7cc45bb33b9d66a2ca896e6cc173285c043c932be151f45d59"}...
+    # 2025-06-23 22:01:25,552 - ERROR - OpenAI error: {
+    #   "error": {
+    #     "message": "Invalid 'max_output_tokens': integer below minimum value. Expected a value >= 16, but got 1 instead.",
+    #     "type": "invalid_request_error",
+    #     "param": "max_output_tokens",
+    #     "code": "integer_below_min_value"
+    #   }
+    # }
+
     # Map parameters
     if "max_tokens" in anthropic_req:
         openai_req["max_output_tokens"] = anthropic_req["max_tokens"]
+        if openai_req["max_output_tokens"] < 16:
+            openai_req["max_output_tokens"] = 16
         
     if "temperature" in anthropic_req:
         openai_req["temperature"] = anthropic_req["temperature"]
@@ -60,16 +79,16 @@ def anthropic_to_openai_request(anthropic_req: Dict[str, Any]) -> Dict[str, Any]
         
     if "tool_choice" in anthropic_req:
         openai_req["tool_choice"] = _convert_tool_choice_to_openai(anthropic_req["tool_choice"])
-        
+
     # Handle metadata
     if "metadata" in anthropic_req:
         openai_req["metadata"] = {}
         if "user_id" in anthropic_req["metadata"]:
             openai_req["user"] = anthropic_req["metadata"]["user_id"]
-            
+
     return openai_req
 
-def openai_to_anthropic_response( openai_resp: Dict[str, Any]) -> Dict[str, Any]:
+def openai_to_anthropic_response(openai_resp: Dict[str, Any]) -> Dict[str, Any]:
     """Convert OpenAI Responses API response to Anthropic Messages format."""
     # Build Anthropic response
     anthropic_resp = {
@@ -81,7 +100,7 @@ def openai_to_anthropic_response( openai_resp: Dict[str, Any]) -> Dict[str, Any]
         "stop_reason": _convert_stop_reason(openai_resp),
         "stop_sequence": None,
     }
-    
+
     # Convert output items to content blocks
     for item in openai_resp.get("output", []):
         if item.get("type") == "message" and item.get("role") == "assistant":
@@ -99,17 +118,25 @@ def openai_to_anthropic_response( openai_resp: Dict[str, Any]) -> Dict[str, Any]
                         "name": content_item["name"],
                         "input": json.loads(content_item["arguments"]) if isinstance(content_item["arguments"], str) else content_item["arguments"]
                     })
+        elif item.get("type") == "function_call":
+            # Handle function calls from OpenAI
+            anthropic_resp["content"].append({
+                "type": "tool_use",
+                "id": item.get("call_id", item.get("id", f"toolu_{uuid.uuid4().hex[:8]}")),
+                "name": item.get("name", ""),
+                "input": json.loads(item.get("arguments", "{}")) if isinstance(item.get("arguments", "{}"), str) else item.get("arguments", {})
+            })
         elif item.get("type") == "reasoning":
             # Skip reasoning blocks for now - Anthropic doesn't have an equivalent
             pass
-    
+
     # Convert usage
     if "usage" in openai_resp:
         anthropic_resp["usage"] = {
             "input_tokens": openai_resp["usage"].get("input_tokens", 0),
             "output_tokens": openai_resp["usage"].get("output_tokens", 0)
         }
-    
+
     return anthropic_resp
 
 def _extract_text_content( content: Union[str, List[Dict[str, Any]]]) -> str:
@@ -130,12 +157,18 @@ def _contains_tool_results( msg: Dict[str, Any]) -> bool:
         return False
     return any(block.get("type") == "tool_result" for block in msg["content"])
 
+def _contains_tool_use( msg: Dict[str, Any]) -> bool:
+    """Check if message contains tool use."""
+    if not isinstance(msg.get("content"), list):
+        return False
+    return any(block.get("type") == "tool_use" for block in msg["content"])
+
 def _split_tool_message( msg: Dict[str, Any]) -> List[Dict[str, Any]]:
     """Split a message containing tool results into separate input items."""
     items = []
     text_parts = []
     tool_calls = []
-    
+
     for block in msg.get("content", []):
         if block.get("type") == "text":
             text_parts.append(block["text"])
@@ -144,163 +177,124 @@ def _split_tool_message( msg: Dict[str, Any]) -> List[Dict[str, Any]]:
         elif block.get("type") == "tool_result":
             # Add any accumulated content first
             if text_parts or tool_calls:
-                if text_parts and tool_calls:
-                    # Assistant message with both text and tool calls
-                    items.append({
-                        "role": "assistant",
-                        "content": [{
-                            "type": "output_text",
-                            "text": "\n".join(text_parts)
-                        }] + [{
-                            "type": "tool_call",
-                            "id": tc["id"],
-                            "name": tc["name"],
-                            "arguments": json.dumps(tc["input"])
-                        } for tc in tool_calls]
-                    })
-                elif text_parts:
+                # For the Responses API, we need to handle tool calls differently
+                # They should be separate output items, not part of message content
+                if text_parts:
                     items.append({
                         "role": "assistant" if msg["role"] == "assistant" else "user",
                         "content": "\n".join(text_parts)
                     })
-                elif tool_calls:
+
+                # Add tool calls as separate function_call items
+                for tc in tool_calls:
                     items.append({
-                        "role": "assistant",
-                        "content": [{
-                            "type": "tool_call",
-                            "id": tc["id"],
-                            "name": tc["name"],
-                            "arguments": json.dumps(tc["input"])
-                        } for tc in tool_calls]
+                        "type": "function_call",
+                        "name": tc["name"],
+                        "arguments": json.dumps(tc["input"]),
+                        "call_id": tc["id"]
                     })
+
                 text_parts = []
                 tool_calls = []
-            
+
             # Add tool result
             items.append({
-                "type": "tool_call_output",
-                "id": block["tool_use_id"],
+                "type": "function_call_output",
+                "call_id": block["tool_use_id"],
                 "output": _extract_tool_result_content(block.get("content", ""))
             })
-    
+
     # Add any remaining content
     if text_parts or tool_calls:
-        if text_parts and tool_calls:
-            items.append({
-                "role": "assistant",
-                "content": [{
-                    "type": "output_text",
-                    "text": "\n".join(text_parts)
-                }] + [{
-                    "type": "tool_call",
-                    "id": tc["id"],
-                    "name": tc["name"],
-                    "arguments": json.dumps(tc["input"])
-                } for tc in tool_calls]
-            })
-        elif text_parts:
+        if text_parts:
             items.append({
                 "role": msg["role"],
                 "content": "\n".join(text_parts)
             })
-        elif tool_calls:
+        
+        # Add remaining tool calls as separate function_call items
+        for tc in tool_calls:
             items.append({
-                "role": "assistant",
-                "content": [{
-                    "type": "tool_call",
-                    "id": tc["id"],
-                    "name": tc["name"],
-                    "arguments": json.dumps(tc["input"])
-                } for tc in tool_calls]
+                "type": "function_call",
+                "name": tc["name"],
+                "arguments": json.dumps(tc["input"]),
+                "call_id": tc["id"]
             })
     
     return items
 
-def _convert_message_to_input( msg: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+def _convert_message_to_input(msg: Dict[str, Any]) -> Optional[Dict[str, Any]]:
     """Convert Anthropic message to OpenAI Responses input item."""
+    logger.debug(f"Converting message: {msg}")
     role = msg["role"]
-    content = msg["content"]
-    
-    # Simple string content – for a basic user / assistant / developer
-    # message we only need the role and content keys. The "type" field is
-    # implicit (a plain message) and *must not* be included – the
-    # Responses API will reject unknown keys.  Including it caused the
-    # entire input array to be ignored which manifested as the
-    # "One of \"input\" or ... must be provided" error that the test
-    # harness reported.
-    if isinstance(content, str):
-        return {
-            "role": role,
-            "content": content
-        }
-    
+    if "text" in msg:
+        return {"role": role, "content": msg["text"]}
+
+    content = msg.get("content", [])
     # Complex content blocks
-    if isinstance(content, list):
-        text_parts = []
-        output_content = []
-        
-        for block in content:
-            block_type = block.get("type")
-            
-            if block_type == "text":
-                text_parts.append(block["text"])
-                
-            elif block_type == "image":
-                # Convert image to base64 URL format
-                source = block.get("source", {})
-                if source.get("type") == "base64":
-                    output_content.append({
-                        "type": "input_image",
-                        "image": {
-                            "format": source["media_type"].split("/")[1],
-                            "source": {
-                                "type": "base64",
-                                "data": source["data"]
-                            }
-                        }
-                    })
-                    
-            elif block_type == "tool_use":
+    if not isinstance(content, list):
+        logger.warning(f"Unsupported content format: {type(content)} in message: {msg}")
+        return None
+    text_parts = []
+    output_content = []
+
+    for block in content:
+        block_type = block.get("type")
+
+        if block_type == "text":
+            text_parts.append(block["text"])
+
+        elif block_type == "image":
+            # Convert image to base64 URL format
+            source = block.get("source", {})
+            if source.get("type") == "base64":
                 output_content.append({
-                    "type": "tool_call",
-                    "id": block["id"],
-                    "name": block["name"],
-                    "arguments": json.dumps(block["input"])
+                    "type": "input_image",
+                    "image": {
+                        "format": source["media_type"].split("/")[1],
+                        "source": {
+                            "type": "base64",
+                            "data": source["data"]
+                        }
+                    }
                 })
-                
-            elif block_type == "thinking":
-                # Skip thinking blocks - OpenAI doesn't support them
-                logger.debug("Skipping thinking block")
-                continue
-                
-            else:
-                logger.warning(f"Unknown content block type: {block_type}")
-        
-        # Build output
-        if text_parts:
-            # If we only have text and no additional structured content
-            # then the payload is still the simple form without a `type`
-            # key.
-            if not output_content:
-                return {
-                    "role": role,
-                    "content": "\n".join(text_parts)
-                }
-            else:
-                # Mix of text and other content.  In this case we keep the
-                # structured `output_content` list but we still omit the
-                # super-fluous top-level `type` key.
-                output_content.insert(0, {
-                    "type": "output_text" if role == "assistant" else "input_text",
-                    "text": "\n".join(text_parts)
-                })
-        
-        if output_content:
+
+        elif block_type == "tool_use":
+            # For the Responses API, tool uses should not be included 
+            # in the content array when they're part of the input
+            # They need to be separate function_call items
+            logger.debug(f"Skipping tool_use block in message content: {block['name']}")
+            continue
+
+        elif block_type == "thinking":
+            # Skip thinking blocks - OpenAI doesn't support them
+            logger.debug("Skipping thinking block")
+            continue
+
+        else:
+            logger.warning(f"Unknown content block type: {block_type}")
+
+    # Build output
+    if text_parts:
+        # If we only have text and no additional structured content
+        # then the payload is still the simple form without a `type`
+        # key.
+        if not output_content:
             return {
                 "role": role,
-                "content": output_content
+                "content": "\n".join(text_parts)
             }
-    
+        # Mix of text and other content.  In this case we keep the
+        # structured `output_content` list but we still omit the
+        # super-fluous top-level `type` key.
+        output_content.insert(0, {
+            "type": "output_text" if role == "assistant" else "input_text",
+            "text": "\n".join(text_parts)
+        })
+
+    if output_content:
+        return {"role": role, "content": output_content}
+    logger.warning(f"No valid content found in message: {msg}")
     return None
 
 def _extract_tool_result_content( content: Any) -> str:
@@ -318,16 +312,15 @@ def _extract_tool_result_content( content: Any) -> str:
 
 def _convert_tools_to_openai( tools: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     """Convert Anthropic tools to OpenAI format."""
+    # For the Responses API, tools have a simpler structure
     openai_tools = []
     
     for tool in tools:
         openai_tool = {
             "type": "function",
-            "function": {
-                "name": tool["name"],
-                "description": tool.get("description", ""),
-                "parameters": tool.get("input_schema", {})
-            }
+            "name": tool["name"],
+            "description": tool.get("description", ""),
+            "parameters": tool.get("input_schema", {})
         }
         openai_tools.append(openai_tool)
         

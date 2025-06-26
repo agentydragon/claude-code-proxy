@@ -20,24 +20,6 @@
             margin-bottom: 20px;
             box-shadow: 0 2px 4px rgba(0,0,0,0.1);
         }
-        .test-case {
-            background: white;
-            margin-bottom: 30px;
-            border-radius: 8px;
-            overflow: hidden;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-        }
-        .test-header {
-            background: #007bff;
-            color: white;
-            padding: 10px 20px;
-            font-weight: bold;
-        }
-        .test-description {
-            padding: 10px 20px;
-            background: #e9ecef;
-            border-bottom: 1px solid #dee2e6;
-        }
         table {
             width: 100%;
             border-collapse: collapse;
@@ -53,14 +35,6 @@
             padding: 5px;
             border-bottom: 1px solid #dee2e6;
             vertical-align: top;
-        }
-        .request-type {
-            background: #e7f3ff;
-            font-weight: 600;
-        }
-        .response-type {
-            background: #fff3cd;
-            font-weight: 600;
         }
         pre {
             background: #f8f9fa;
@@ -89,196 +63,31 @@
             border-radius: 4px;
             margin: 10px 0;
         }
-        .json-key {
-            color: #881391;
-        }
-        .json-string {
-            color: #0451a5;
-        }
-        .json-number {
-            color: #098658;
-        }
-        .json-boolean {
-            color: #0000ff;
-        }
-        .column-header {
-            text-align: center;
-            font-size: 14px;
-        }
-        .config-info {
-            background: #e7f3ff;
-            padding: 15px;
-            border-radius: 4px;
-            margin-bottom: 10px;
-        }
     </style>
 </head>
 <body>
     <h1>API Conversion Test Report</h1>
-    <div class="summary">
-        <h2>Summary</h2>
-        <strong>Test Time:</strong> {{ test_time }} •
-        <strong>Total Tests:</strong> {{ total_tests }} •
-        <strong>Successful:</strong> <span class="success">{{ successful_tests }}</span> •
-        <strong>Failed:</strong> <span class="error">{{ failed_tests }}</span>
-        
-        <div class="config-info">
-            <h3>Configuration</h3>
-            <strong>Big Model:</strong> {{ big_model }} •
-            <strong>Small Model:</strong> {{ small_model }} •
-            <strong>Output Directory:</strong> {{ output_dir }}
-        </div>
-    </div>
-    
-    {% for result in results %}
-    <div class="test-case">
-        <div class="test-header">{{ result.fixture.name }}</div>
-        <div class="test-description">{{ result.fixture.description }}</div>
-        
-        {% if result.errors %}
-        <div style="padding: 20px;">
-            <div class="error">
-                <strong>Errors:</strong><br>
-                {% for error in result.errors %}
-                {{ error }}<br>
-                {% endfor %}
-            </div>
-        </div>
-        {% endif %}
-        
-        <table>
-            <thead>
+    <strong>Output Directory:</strong> {{ output_dir }}
+
+    <table>
+        <thead>
+            <tr>
+                <th>Type</th>
+                <th class="column-header">Anthropic request to proxy</th>
+                <th class="column-header">Proxy response</th>
+                <th class="column-header">Logs</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for result in results %}
                 <tr>
-                    <th width="10%">Type</th>
-                    <th width="30%" class="column-header">Anthropic Native</th>
-                    <th width="30%" class="column-header">Anthropic → OpenAI</th>
-                    <th width="30%" class="column-header">OpenAI Native</th>
+                    <td>{{ result.fixture.name }}<br>{{ result.fixture.description }}</td>
+                    <td><pre>{{ result.anthropic_request | tojson(indent=2) }}</pre></td>
+                    <td><pre>{{ result.proxy_response }}</pre></td>
+                    <td><pre>{{ result.logs }}</pre></td>
                 </tr>
-            </thead>
-            <tbody>
-                <!-- Requests Row -->
-                <tr>
-                    <td class="request-type">Request</td>
-                    <td>
-                        <pre>{{ result.anthropic_native.request | tojson(indent=2) }}</pre>
-                    </td>
-                    <td>
-                        {% if result.anthropic_converted.converted_request %}
-                        <strong>Converted to:</strong>
-                        <pre>{{ result.anthropic_converted.converted_request | tojson(indent=2) }}</pre>
-                        {% else %}
-                        <span class="error">Conversion failed</span>
-                        {% endif %}
-                    </td>
-                    <td>
-                        <pre>{{ result.openai_native.request | tojson(indent=2) }}</pre>
-                    </td>
-                </tr>
-                
-                <!-- Responses Row -->
-                <tr>
-                    <td class="response-type">Response</td>
-                    <td>
-                        {% if result.anthropic_native.response %}
-                        <pre>{{ result.anthropic_native.response | tojson(indent=2) }}</pre>
-                        {% if result.anthropic_native.raw_response %}
-                        <details style="margin-top: 10px;">
-                            <summary>Raw HTTP Response</summary>
-                            <pre style="font-size: 11px;">Status: {{ result.anthropic_native.raw_response.status_code }}
-Headers: {{ result.anthropic_native.raw_response.headers | tojson(indent=2) }}
-Body: (See response above)</pre>
-                        </details>
-                        {% endif %}
-                        {% elif result.anthropic_native.error %}
-                        <div class="error">
-                            {% if result.anthropic_native.error_type %}
-                            <strong>{{ result.anthropic_native.error_type }}:</strong><br>
-                            {% endif %}
-                            {{ result.anthropic_native.error }}
-                            {% if result.anthropic_native.raw_response %}
-                            <details style="margin-top: 10px;">
-                                <summary>Raw HTTP Response</summary>
-                                <pre style="font-size: 11px;">Status: {{ result.anthropic_native.raw_response.status_code }}
-Headers: {{ result.anthropic_native.raw_response.headers | tojson(indent=2) }}
-Body: {{ result.anthropic_native.raw_response.body }}</pre>
-                            </details>
-                            {% endif %}
-                            {% if result.anthropic_native.traceback %}
-                            <details style="margin-top: 10px;">
-                                <summary>Traceback</summary>
-                                <pre style="font-size: 11px;">{{ result.anthropic_native.traceback }}</pre>
-                            </details>
-                            {% endif %}
-                        </div>
-                        {% endif %}
-                    </td>
-                    <td>
-                        {% if result.anthropic_converted.converted_response %}
-                        <strong>OpenAI Response:</strong>
-                        <pre>{{ result.anthropic_converted.openai_response | tojson(indent=2) }}</pre>
-                        <strong>Converted back to Anthropic:</strong>
-                        <pre>{{ result.anthropic_converted.converted_response | tojson(indent=2) }}</pre>
-                        {% elif result.anthropic_converted.error %}
-                        <div class="error">
-                            {% if result.anthropic_converted.error_type %}
-                            <strong>{{ result.anthropic_converted.error_type }}:</strong><br>
-                            {% endif %}
-                            {{ result.anthropic_converted.error }}
-                            {% if result.anthropic_converted.raw_response %}
-                            <details style="margin-top: 10px;">
-                                <summary>Raw HTTP Response</summary>
-                                <pre style="font-size: 11px;">Status: {{ result.anthropic_converted.raw_response.status_code }}
-Headers: {{ result.anthropic_converted.raw_response.headers | tojson(indent=2) }}
-Body: {{ result.anthropic_converted.raw_response.body }}</pre>
-                            </details>
-                            {% endif %}
-                            {% if result.anthropic_converted.traceback %}
-                            <details style="margin-top: 10px;">
-                                <summary>Traceback</summary>
-                                <pre style="font-size: 11px;">{{ result.anthropic_converted.traceback }}</pre>
-                            </details>
-                            {% endif %}
-                        </div>
-                        {% endif %}
-                    </td>
-                    <td>
-                        {% if result.openai_native.response %}
-                        <pre>{{ result.openai_native.response | tojson(indent=2) }}</pre>
-                        {% if result.openai_native.raw_response %}
-                        <details style="margin-top: 10px;">
-                            <summary>Raw HTTP Response</summary>
-                            <pre style="font-size: 11px;">Status: {{ result.openai_native.raw_response.status_code }}
-Headers: {{ result.openai_native.raw_response.headers | tojson(indent=2) }}
-Body: (See response above)</pre>
-                        </details>
-                        {% endif %}
-                        {% elif result.openai_native.error %}
-                        <div class="error">
-                            {% if result.openai_native.error_type %}
-                            <strong>{{ result.openai_native.error_type }}:</strong><br>
-                            {% endif %}
-                            {{ result.openai_native.error }}
-                            {% if result.openai_native.raw_response %}
-                            <details style="margin-top: 10px;">
-                                <summary>Raw HTTP Response</summary>
-                                <pre style="font-size: 11px;">Status: {{ result.openai_native.raw_response.status_code }}
-Headers: {{ result.openai_native.raw_response.headers | tojson(indent=2) }}
-Body: {{ result.openai_native.raw_response.body }}</pre>
-                            </details>
-                            {% endif %}
-                            {% if result.openai_native.traceback %}
-                            <details style="margin-top: 10px;">
-                                <summary>Traceback</summary>
-                                <pre style="font-size: 11px;">{{ result.openai_native.traceback }}</pre>
-                            </details>
-                            {% endif %}
-                        </div>
-                        {% endif %}
-                    </td>
-                </tr>
-            </tbody>
-        </table>
-    </div>
-    {% endfor %}
+            {% endfor %}
+        </tbody>
+    </table>
 </body>
 </html>

@@ -10,8 +10,6 @@ gemini_api_key = "AIxxx"
 
 # Provider Settings
 preferred_provider = "openai"  # Options: openai, google
-big_model = "gpt-4o"           # Model for complex requests (sonnet, opus)
-small_model = "gpt-4o-mini"    # Model for simple requests (haiku)
 
 # Server Settings
 host = "0.0.0.0"
@@ -30,13 +28,6 @@ openai_models = [
     "o1-mini",
     "o1-preview",
     "o3-mini"
-]
-
-gemini_models = [
-    "gemini-2.0-flash",
-    "gemini-1.5-pro",
-    "gemini-1.5-flash",
-    "gemini-1.0-pro"
 ]
 
 # Custom Model Mappings

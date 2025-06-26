@@ -1,11 +1,10 @@
 """Claude Code Proxy Server - Direct Anthropic to OpenAI conversion."""
 
-import asyncio
+import copy
 import json
 import logging
-import os
 import time
-from typing import Any, Dict, Optional
+import uuid
 
 import httpx
 from fastapi import FastAPI, HTTPException, Request
@@ -19,198 +18,232 @@ from .converter_v2 import (anthropic_to_openai_request,
 config = load_config()
 
 # Configure logging
-log_level = getattr(logging, config.log_level.upper())
+log_level = logging._nameToLevel[config.log_level.upper()]
 logging.basicConfig(
-    level=log_level,
-    format='%(asctime)s - %(levelname)s - %(message)s',
+  level=log_level,
+  format='%(asctime)s - %(levelname)s - %(message)s',
 )
 logger = logging.getLogger(__name__)
 
+
 app = FastAPI()
 
-# Get API keys from config
-OPENAI_API_KEY = config.openai_api_key
+OPENAI_CLIENT= httpx.AsyncClient(
+    headers={"Authorization": f"Bearer {config.openai_api_key}"}
+)
 
-# O-series models that require temperature=1
-O_SERIES_MODELS = ['o1', 'o1-mini', 'o1-preview', 'o3', 'o3-mini', 'o4-mini']
+def _trunc(x):
+    T = 10000
+    x = copy.deepcopy(x)
+    if isinstance(x, dict):
+        # recurively crawl, trunc all strs to 30 chars
+        def truncate_dict(d):
+            for k, v in d.items():
+                if isinstance(v, str):
+                    d[k] = v[:20]
+                elif isinstance(v, dict):
+                    truncate_dict(v)
+                elif isinstance(v, list):
+                    for item in v:
+                        if isinstance(item, dict):
+                            truncate_dict(item)
+        truncate_dict(x)
 
+        x = json.dumps(x)
+    if len(x) > T:
+        return x[:T] + "..."
+    return x
 
-async def call_openai_responses_api_streaming(request_body: Dict[str, Any]):
-    """Call OpenAI Responses API with streaming."""
-    headers = {
-        "Authorization": f"Bearer {OPENAI_API_KEY}",
-        "Content-Type": "application/json"
-    }
-    
-    # Ensure stream is True
-    request_body["stream"] = True
-    
-    async with httpx.AsyncClient() as client:
-        async with client.stream(
-            "POST",
-            "https://api.openai.com/v1/responses",
-            headers=headers,
-            json=request_body,
-            timeout=300.0
-        ) as response:
-            if response.status_code != 200:
-                error_text = await response.aread()
-                logger.error(f"OpenAI error: {error_text}")
-                raise HTTPException(status_code=response.status_code, detail=error_text.decode())
-            
-            # Yield response for streaming
-            async for line in response.aiter_lines():
-                yield line
-
-
-async def call_openai_responses_api(request_body: Dict[str, Any]) -> Dict[str, Any]:
-    """Call OpenAI Responses API without streaming."""
-    headers = {
-        "Authorization": f"Bearer {OPENAI_API_KEY}",
-        "Content-Type": "application/json"
-    }
-    
-    # Ensure stream is False
-    request_body["stream"] = False
-    
-    async with httpx.AsyncClient() as client:
-        response = await client.post(
-            "https://api.openai.com/v1/responses",
-            headers=headers,
-            json=request_body,
-            timeout=300.0
-        )
-        
+async def stream_handler(openai_request):
+    logger.debug(f"Starting stream handler with request: {_trunc(openai_request)}")
+    async with OPENAI_CLIENT.stream(
+        "POST",
+        "https://api.openai.com/v1/responses",
+        json=openai_request,
+        timeout=300.0
+    ) as response:
         if response.status_code != 200:
-            error_text = response.text
-            logger.error(f"OpenAI error: {error_text}")
-            raise HTTPException(status_code=response.status_code, detail=error_text)
+            error_text = await response.aread()
+            logger.error(f"OpenAI streaming error: {error_text}")
+            raise HTTPException(status_code=response.status_code, detail=error_text.decode())
         
-        return response.json()
+        logger.debug(f"Streaming response status: {response.status_code}")
+        
+        # Track if we've started the content block
+        content_block_started = False
+        message_started = False
+        current_event = None
+
+
+        def _data(type, **kwargs):
+            """Helper function to format data for streaming."""
+            yield f"event: {type}\n"
+            data = {"type": type, **kwargs}
+            yield f"data: {json.dumps(data)}\n\n"
+
+        async for line in response.aiter_lines():
+            logger.debug(f"received line: {_trunc(line)}")
+            if not line.strip():
+                continue
+
+            EVENT_PREFIX = "event: "
+            if line.startswith(EVENT_PREFIX):
+                event = line.removeprefix(EVENT_PREFIX).strip()
+                logger.debug(f"Received event: {event}")
+                if event in ("response.created", "response.in_progress", "response.output_item.added"):
+                    logger.debug(f"Noop event: {event}")
+                elif event == "response.output_text.delta":
+                    # This is a text delta event, we'll handle it when we get the data
+                    logger.debug(f"Received text delta event: {event}")
+                elif event == "response.done":
+                    # Convert to Anthropic's completion events
+                    if content_block_started:
+                        _data(type="content_block_stop", index=0)
+                    _data(
+                        type="message_delta",
+                        delta={
+                            "stop_reason": "end_turn",
+                            "stop_sequence": None
+                        },
+                        # Would need to track this
+                        usage={"output_tokens": 0}
+                    )
+                    _data(type="message_stop")
+                    break
+                # Skip other events for now
+                continue
+
+
+            DATA_PREFIX = "data: "
+            if not line.startswith(DATA_PREFIX):
+                logger.debug(f"Skipping non-data line: {line}")
+                continue
+
+            data = line.removeprefix(DATA_PREFIX)
+
+            if data == "[DONE]":
+                # Convert to Anthropic's completion event
+                yield "event: message_stop\n"
+                yield _data({
+                    "type": "message_stop"
+                })
+                break
+
+            chunk = json.loads(data)
+            logger.debug(f"Parsed chunk: {_trunc(chunk)}")
+
+            # Convert OpenAI Responses API chunk to Anthropic format
+            chunk_type = chunk.get("type")
+            
+            # Handle different streaming event types
+            if chunk_type == "response.output_text.delta":
+                # Text delta event from newer API format
+                if (text := chunk.get("delta", "")):
+                    # Start message if not started
+                    if not message_started:
+                        _data(
+                            type="message_start",
+                            message={
+                                "id": f"msg_{uuid.uuid4().hex}",
+                                "type": "message",
+                                "role": "assistant",
+                                "content": [],
+                                "model": openai_request.get("model", "unknown"),
+                                "stop_reason": None,
+                                "stop_sequence": None,
+                                "usage": {"input_tokens": 0, "output_tokens": 0}
+                            }
+                        )
+                        message_started = True
+
+                    # Start content block if not started
+                    if not content_block_started:
+                        _data(
+                            type="content_block_start",
+                            index=0,
+                            content_block={
+                                "type": "text",
+                                "text": ""
+                            }
+                        )
+                        content_block_started = True
+
+                    _data(
+                        type="content_block_delta",
+                        index=0,
+                        delta={"type": "text_delta", "text": text}
+                    )
+            elif chunk_type == "response.output.delta":
+                # Legacy format
+                delta = chunk.get("delta", {})
+                if delta.get("type") == "output_text" and "text" in delta:
+                    _data(
+                        type="content_block_delta",
+                        index=0,
+                        delta={"type": "text_delta", "text": delta["text"]}
+                    )
+
+                # Handle tool calls for legacy format
+                for i, tool_call in enumerate(delta.get("tool_calls", [])):
+                    if not (fn := tool_call.get("function")):
+                        logger.error(f"Skipping tool call without function: {tool_call}")
+                        continue
+
+                    # Tool call start
+                    if "name" in fn:
+                        _data(
+                            type="content_block_start",
+                            index=i + 1,  # After text content
+                            content_block={
+                                "type": "tool_use",
+                                "id": tool_call.get("id", f"tool_{i}"),
+                                "name": fn["name"],
+                                "input": {}
+                            }
+                        )
+
+                    # Tool call arguments delta
+                    if (args := fn.get("arguments")):
+                        _data(
+                            type="content_block_delta",
+                            index=i + 1,
+                            delta={"type": "input_json_delta", "partial_json": args}
+                        )
+
+async def handle_anthropic(anthropic_req):
+    logger.info(f"Received Anthropic request: {_trunc(anthropic_req)}")
+    openai_request = anthropic_to_openai_request(anthropic_req)
+    logger.debug(f"OpenAI request: {_trunc(openai_request)}")
+
+    if anthropic_req.get("stream"):
+        try:
+            return StreamingResponse(stream_handler(openai_request), media_type="text/event-stream")
+        except Exception as e:
+            logger.exception(f"Streaming error: {e}")
+            raise HTTPException(status_code=500, detail=f"Streaming error: {str(e)}")
+
+    # Non-streaming request
+    response = await OPENAI_CLIENT.post(
+        "https://api.openai.com/v1/responses",
+        json=openai_request,
+        timeout=300.0
+    )
+    if response.status_code != 200:
+        logger.error(f"OpenAI error: {response.text}")
+        raise HTTPException(status_code=response.status_code, detail=response.text)
+    openai_response = response.json()
+    logger.debug(f"OpenAI response: {_trunc(openai_response)}")
+
+    anthropic_response = openai_to_anthropic_response(openai_response)
+    logger.info(f"Response converted to Anthropic: {_trunc(anthropic_response)}")
+    return JSONResponse(content=anthropic_response)
 
 
 @app.post("/v1/messages")
 async def handle_messages(request: Request):
     """Handle Anthropic Messages API requests."""
     try:
-        # Parse request body
-        body = await request.json()
-        logger.info(f"Received Anthropic request for model: {body.get('model')}")
-        
-        # Convert to OpenAI format
-        openai_request = anthropic_to_openai_request(body)
-        
-        # Map model names
-        model = openai_request["model"]
-        if "haiku" in model.lower():
-            openai_request["model"] = config.small_model
-        elif "opus" in model.lower() or "sonnet" in model.lower():
-            openai_request["model"] = config.big_model
-        else:
-            # Use the model as-is if it's already an OpenAI model
-            pass
-        
-        # Handle O-series temperature override
-        model_name = openai_request["model"]
-        if model_name in O_SERIES_MODELS and openai_request.get("temperature", 1.0) != 1.0:
-            logger.info(f"Overriding temperature to 1.0 for O-series model: {model_name}")
-            openai_request["temperature"] = 1.0
-        
-        logger.info(f"Mapped to OpenAI model: {openai_request['model']}")
-        logger.debug(f"OpenAI request: {json.dumps(openai_request, default=str)[:500]}...")
-        
-        if body.get("stream"):
-            # Streaming request
-            async def stream_handler():
-                async for line in call_openai_responses_api_streaming(openai_request):
-                    # Convert streaming response
-                    if not line.strip():
-                        continue
-                    
-                    if line.startswith("data: "):
-                        data = line[6:]
-                        
-                        if data == "[DONE]":
-                            # Convert to Anthropic's completion event
-                            yield "event: message_stop\n"
-                            yield "data: {\"type\": \"message_stop\"}\n\n"
-                            break
-                        
-                        try:
-                            chunk = json.loads(data)
-                            
-                            # Convert OpenAI Responses API chunk to Anthropic format
-                            # The Responses API uses a different streaming format
-                            if chunk.get("type") == "response.output.delta":
-                                delta = chunk.get("delta", {})
-                                
-                                # Handle text output delta
-                                if delta.get("type") == "output_text" and "text" in delta:
-                                    anthropic_event = {
-                                        "type": "content_block_delta",
-                                        "index": 0,
-                                        "delta": {
-                                            "type": "text_delta",
-                                            "text": delta["text"]
-                                        }
-                                    }
-                                    yield f"event: content_block_delta\n"
-                                    yield f"data: {json.dumps(anthropic_event)}\n\n"
-                                
-                                # Handle tool calls
-                                if "tool_calls" in delta:
-                                    for i, tool_call in enumerate(delta["tool_calls"]):
-                                        if "function" in tool_call:
-                                            # Tool call start
-                                            if "name" in tool_call["function"]:
-                                                anthropic_event = {
-                                                    "type": "content_block_start",
-                                                    "index": i + 1,  # After text content
-                                                    "content_block": {
-                                                        "type": "tool_use",
-                                                        "id": tool_call.get("id", f"tool_{i}"),
-                                                        "name": tool_call["function"]["name"],
-                                                        "input": {}
-                                                    }
-                                                }
-                                                yield f"event: content_block_start\n"
-                                                yield f"data: {json.dumps(anthropic_event)}\n\n"
-                                            
-                                            # Tool call arguments delta
-                                            if "arguments" in tool_call["function"]:
-                                                anthropic_event = {
-                                                    "type": "content_block_delta",
-                                                    "index": i + 1,
-                                                    "delta": {
-                                                        "type": "input_json_delta",
-                                                        "partial_json": tool_call["function"]["arguments"]
-                                                    }
-                                                }
-                                                yield f"event: content_block_delta\n"
-                                                yield f"data: {json.dumps(anthropic_event)}\n\n"
-                        
-                        except json.JSONDecodeError:
-                            logger.error(f"Failed to parse streaming chunk: {data}")
-                            continue
-            
-            # Return streaming response
-            return StreamingResponse(
-                stream_handler(),
-                media_type="text/event-stream"
-            )
-        else:
-            # Non-streaming request
-            openai_response = await call_openai_responses_api(openai_request)
-            logger.debug(f"OpenAI response: {json.dumps(openai_response, default=str)[:500]}...")
-            
-            # Convert response to Anthropic format
-            anthropic_response = openai_to_anthropic_response(openai_response)
-            
-            logger.info(f"Request completed successfully")
-            return JSONResponse(content=anthropic_response)
-                
-    except HTTPException:
-        raise
+        return await handle_anthropic(await request.json())
     except Exception as e:
         logger.exception("Unexpected error")
         raise HTTPException(status_code=500, detail=str(e))
@@ -221,9 +254,7 @@ async def count_tokens(request: Request):
     """Handle token counting requests."""
     # For now, return a placeholder response
     # In a real implementation, you'd use tiktoken or similar
-    return JSONResponse({
-        "input_tokens": 100  # Placeholder
-    })
+    return JSONResponse({"input_tokens": 100})
 
 
 @app.get("/health")

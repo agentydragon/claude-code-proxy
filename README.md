@@ -92,8 +92,6 @@ gemini_api_key = "AI..."          # Required for Gemini models
 #### Model Mapping
 ```toml
 preferred_provider = "openai"   # Default provider: "openai" or "google"
-big_model = "gpt-4o"           # Model for complex requests (sonnet, opus)
-small_model = "gpt-4o-mini"    # Model for simple requests (haiku)
 ```
 
 #### Server Settings
@@ -127,8 +125,6 @@ Environment variables can be used as fallback when not set in config:
 - `OPENAI_API_KEY`
 - `GEMINI_API_KEY`
 - `PREFERRED_PROVIDER`
-- `BIG_MODEL`
-- `SMALL_MODEL`
 - `PROXY_HOST`
 - `PROXY_PORT`
 - `LOG_LEVEL`
@@ -139,16 +135,12 @@ Environment variables can be used as fallback when not set in config:
 ```toml
 openai_api_key = "sk-proj-..."
 preferred_provider = "openai"
-big_model = "gpt-4o"
-small_model = "gpt-4o-mini"
 ```
 
 #### Using Gemini for everything:
 ```toml
 gemini_api_key = "AI..."
 preferred_provider = "google"
-big_model = "gemini-1.5-pro"
-small_model = "gemini-1.5-flash"
 ```
 
 #### Mixed providers with custom mappings:
@@ -156,8 +148,6 @@ small_model = "gemini-1.5-flash"
 openai_api_key = "sk-proj-..."
 gemini_api_key = "AI..."
 preferred_provider = "openai"
-big_model = "gpt-4o"
-small_model = "gemini-1.5-flash"  # Use Gemini for small models
 
 [[custom_mappings]]
 pattern = "claude-3-opus"
@@ -195,47 +185,7 @@ python -c "import tomli; tomli.load(open('config.toml', 'rb'))"
 
 The proxy automatically maps Anthropic model names to your configured providers:
 
-1. **Haiku models** → `small_model`
-2. **Sonnet/Opus models** → `big_model`
-3. **Custom mappings** take precedence over default rules
-
-| Claude Model | Default Mapping | When BIG_MODEL/SMALL_MODEL is a Gemini model |
-|--------------|--------------|---------------------------|
-| haiku | openai/gpt-4o-mini | gemini/[model-name] |
-| sonnet | openai/gpt-4o | gemini/[model-name] |
-
-### Supported Models
-
-#### OpenAI Models
-The following OpenAI models are supported with automatic `openai/` prefix handling:
-- o3-mini
-- o1
-- o1-mini
-- o1-pro
-- gpt-4.5-preview
-- gpt-4o
-- gpt-4o-audio-preview
-- chatgpt-4o-latest
-- gpt-4o-mini
-- gpt-4o-mini-audio-preview
-- gpt-4.1
-- gpt-4.1-mini
-
-#### Gemini Models
-The following Gemini models are supported with automatic `gemini/` prefix handling:
-- gemini-2.5-pro-preview-03-25
-- gemini-2.0-flash
-
-### Model Prefix Handling
-The proxy automatically adds the appropriate prefix to model names:
-- OpenAI models get the `openai/` prefix 
-- Gemini models get the `gemini/` prefix
-- The BIG_MODEL and SMALL_MODEL will get the appropriate prefix based on whether they're in the OpenAI or Gemini model lists
-
-For example:
-- `gpt-4o` becomes `openai/gpt-4o`
-- `gemini-2.5-pro-preview-03-25` becomes `gemini/gemini-2.5-pro-preview-03-25`
-- When BIG_MODEL is set to a Gemini model, Claude Sonnet will map to `gemini/[model-name]`
+**Custom mappings** take precedence over default rules
 
 ### Customizing Model Mapping
 
