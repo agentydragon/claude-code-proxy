@@ -3,24 +3,29 @@
 import json
 import logging
 import uuid
+import fnmatch
+from claude_code_proxy.config import load_config
 from typing import Any, Dict, List, Optional, Union
 
 logger = logging.getLogger(__name__)
 
-# Model mapping
-ANTHROPIC_TO_OPENAI_MODEL = {
-  "claude-opus-4-20250514": "o3",
-    "claude-sonnet-4-20250514": "o4-mini",
-#    "claude-3-5-haiku-20241022": "gpt-4o-mini",
-#    "claude-3-5-sonnet-20241022": "gpt-4o-mini",
-#    "claude-3-opus-20240229": "gpt-4o-mini",
+# Model mapping loaded from config (supports wildcards)
+CONFIG = load_config()
+ANTHROPIC_TO_OPENAI_MODEL: dict[str, str] = CONFIG.anthropic_to_openai_model or {
+    "claude-opus-4-20250514": "o3",
+    "claude-sonnet-4-20250514": "o3-mini",
+    "claude-3-5-haiku-20241022": "gpt-4o-mini",
+    "claude-3-5-sonnet-20241022": "gpt-4o",
+    "claude-3-opus-20240229": "gpt-4o",
 }
 
 def anthropic_to_openai_request(anthropic_req: Dict[str, Any]) -> Dict[str, Any]:
     """Convert Anthropic Messages API request to OpenAI Responses API format."""
     # Map model
     anthropic_model = anthropic_req["model"]
-    openai_model = ANTHROPIC_TO_OPENAI_MODEL.get(anthropic_model, "gpt-4o-mini")
+    openai_model = ANTHROPIC_TO_OPENAI_MODEL.get(anthropic_model)
+    if not openai_model:
+        raise ValueError(f"No mapping found for Anthropic model: {anthropic_model}")
     openai_req = {"model": openai_model}
 
     # Map system instructions if present (Anthropic 'system' → OpenAI 'instructions')
@@ -120,8 +125,11 @@ def openai_to_anthropic_response(openai_resp: Dict[str, Any]) -> Dict[str, Any]:
                 "input": json.loads(item.get("arguments", "{}")) if isinstance(item.get("arguments", "{}"), str) else item.get("arguments", {})
             })
         elif item.get("type") == "reasoning":
-            # Skip reasoning blocks for now - Anthropic doesn't have an equivalent
-            pass
+            # Map OpenAI reasoning to Anthropic thinking blocks
+            anthropic_resp["content"].append({
+                "type": "thinking",
+                "text": item.get("content", "")
+            })
 
     # Convert usage
     if "usage" in openai_resp:
@@ -266,9 +274,11 @@ def _convert_message_to_input(msg: Dict[str, Any]) -> Optional[Dict[str, Any]]:
             continue
 
         elif block_type == "thinking":
-            # Skip thinking blocks - OpenAI doesn't support them
-            logger.debug("Skipping thinking block")
-            continue
+            # Map thinking blocks to OpenAI reasoning
+            output_content.append({
+                "type": "reasoning",
+                "content": block.get("text", "")
+            })
 
         else:
             logger.warning(f"Unknown content block type: {block_type}")
@@ -293,6 +303,11 @@ def _convert_message_to_input(msg: Dict[str, Any]) -> Optional[Dict[str, Any]]:
 
     if output_content:
         return {"role": role, "content": output_content}
+    
+    # Empty content is valid for assistant messages (e.g., tool-only responses)
+    if role == "assistant" and isinstance(content, list) and len(content) == 0:
+        return {"role": role, "content": []}
+    
     logger.warning(f"No valid content found in message: {msg}")
     return None
 

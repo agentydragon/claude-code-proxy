@@ -23,7 +23,7 @@ class ProxyConfig(BaseModel):
     openai_api_key: str | None
 
     # Custom mappings
-    anthropic_to_openai_model: dict[str, str]
+    anthropic_to_openai_model: dict[str, str] = Field(default_factory=dict)
 
     # Server settings
     host: str = Field("0.0.0.0", description="Host to bind to")
