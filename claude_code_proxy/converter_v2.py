@@ -23,24 +23,17 @@ def anthropic_to_openai_request(anthropic_req: Dict[str, Any]) -> Dict[str, Any]
     openai_model = ANTHROPIC_TO_OPENAI_MODEL.get(anthropic_model, "gpt-4o-mini")
     openai_req = {"model": openai_model}
 
-    # Build input array
-    input_items = []
-    
-    # Add system message if present
+    # Map system instructions if present (Anthropic 'system' → OpenAI 'instructions')
     if "system" in anthropic_req and (system_content := _extract_text_content(anthropic_req["system"])):
-        input_items.append({
-            "role": "developer",  # OpenAI equivalent to Anthropic "system"
-            "content": system_content
-        })
-    
-    # Convert messages to input items
+        openai_req["instructions"] = system_content
+
+    # Build input array from Anthropic messages
+    input_items: List[Dict[str, Any]] = []
     for msg in anthropic_req.get("messages", []):
-        # Handle messages that contain tool results or tool use
+        # Handle messages with tool use or results
         if _contains_tool_results(msg) or _contains_tool_use(msg):
-            # Split into separate items
             input_items.extend(_split_tool_message(msg))
         else:
-            # Convert regular message
             if (item := _convert_message_to_input(msg)):
                 input_items.append(item)
             else:
@@ -227,10 +220,16 @@ def _convert_message_to_input(msg: Dict[str, Any]) -> Optional[Dict[str, Any]]:
     """Convert Anthropic message to OpenAI Responses input item."""
     logger.debug(f"Converting message: {msg}")
     role = msg["role"]
+    # Simple text content shorthand
+    raw = msg.get("content")
+    if isinstance(raw, str):
+        return {"role": role, "content": raw}
+
+    # Handle explicit text field
     if "text" in msg:
         return {"role": role, "content": msg["text"]}
 
-    content = msg.get("content", [])
+    content = raw if raw is not None else []
     # Complex content blocks
     if not isinstance(content, list):
         logger.warning(f"Unsupported content format: {type(content)} in message: {msg}")
