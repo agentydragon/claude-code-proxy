@@ -1,0 +1,736 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>API Conversion Test Report</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            margin: 20px;
+            background: #f5f5f5;
+        }
+        h1 {
+            color: #333;
+            border-bottom: 2px solid #007bff;
+            padding-bottom: 10px;
+        }
+        .summary {
+            background: white;
+            padding: 10px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        th {
+            background: #f8f9fa;
+            padding: 5px;
+            text-align: left;
+            border-bottom: 2px solid #dee2e6;
+            font-weight: 600;
+        }
+        td {
+            padding: 5px;
+            border-bottom: 1px solid #dee2e6;
+            vertical-align: top;
+        }
+        pre {
+            background: #f8f9fa;
+            padding: 5px;
+            border-radius: 4px;
+            overflow-x: auto;
+            max-height: 400px;
+            overflow-y: auto;
+            font-size: 12px;
+            margin: 0;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+            word-break: break-word;
+        }
+        .error {
+            background: #f8d7da;
+            color: #721c24;
+            padding: 10px;
+            border-radius: 4px;
+            margin: 10px 0;
+        }
+        .success {
+            background: #d4edda;
+            color: #155724;
+            padding: 10px;
+            border-radius: 4px;
+            margin: 10px 0;
+        }
+    </style>
+</head>
+<body>
+    <h1>API Conversion Test Report</h1>
+    <strong>Output Directory:</strong> test_fixtures_output
+
+    <table>
+        <thead>
+            <tr>
+                <th>Type</th>
+                <th class="column-header">Anthropic request to proxy</th>
+                <th class="column-header">Proxy response</th>
+                <th class="column-header">Logs</th>
+            </tr>
+        </thead>
+        <tbody>
+            
+                <tr>
+                    <td>simple_text<br>Basic text exchange</td>
+                    <td><pre>{
+  "max_tokens": 1024,
+  "messages": [
+    {
+      "content": "why lizard",
+      "role": "user"
+    }
+  ],
+  "model": "claude-3-5-haiku-20241022"
+}</pre></td>
+                    <td><pre>{
+  "id": "msg_e24e6afdf15a40d18145621f6086788c",
+  "type": "message",
+  "role": "assistant",
+  "content": [
+    {
+      "type": "text",
+      "text": "It seems like you're asking about lizards. Could you clarify what specific aspect you're interested in? Here are a few possibilities:\n\n- **Biology**: Information about their anatomy, behavior, or habitat.\n- **Ecology**: Their role in ecosystems or interactions with other species.\n- **Pets**: Care requirements or types of lizards that can be kept as pets.\n- **Cultural significance**: Their representation in various cultures or myths.\n\nLet me know how I can help!"
+    }
+  ],
+  "model": "gpt-4o-mini-2024-07-18",
+  "stop_reason": "end_turn",
+  "stop_sequence": null,
+  "usage": {
+    "input_tokens": 10,
+    "output_tokens": 100
+  }
+}</pre></td>
+                    <td><pre>2025-06-23 21:53:34,392 - claude_code_proxy.server - INFO - handle_anthropic:207 - Received Anthropic request for model: claude-3-5-haiku-20241022 - /home/agentydragon/claude-code-proxy/claude_code_proxy/server.py - Extras: {'message': 'Received Anthropic request for model: claude-3-5-haiku-20241022', 'asctime': '2025-06-23 21:53:34,392'}
+2025-06-23 21:53:34,392 - claude_code_proxy.server - DEBUG - handle_anthropic:209 - OpenAI request: {"model": "gpt-4o-mini", "input": [{"role": "user", "content": "why lizard"}], "max_output_tokens": 1024}... - /home/agentydragon/claude-code-proxy/claude_code_proxy/server.py - Extras: {'message': 'OpenAI request: {"model": "gpt-4o-mini", "input": [{"role": "user", "content": "why lizard"}], "max_output_tokens": 1024}...', 'asctime': '2025-06-23 21:53:34,392'}
+2025-06-23 21:53:36,902 - claude_code_proxy.server - DEBUG - handle_anthropic:228 - OpenAI response: {"id": "resp_685a2f4e9368819b92d14ab170cb849a0ca742988b78067d", "object": "response", "created_at": 1750740814, "status": "completed", "background": false, "error": null, "incomplete_details": null, "instructions": null, "max_output_tokens": 1024, "model": "gpt-4o-mini-2024-07-18", "output": [{"id": "msg_685a2f4efc38819b85c47cfcc197719a0ca742988b78067d", "type": "message", "status": "completed", "content": [{"type": "output_text", "annotations": [], "text": "It seems like you're asking about liz... - /home/agentydragon/claude-code-proxy/claude_code_proxy/server.py - Extras: {'message': 'OpenAI response: {"id": "resp_685a2f4e9368819b92d14ab170cb849a0ca742988b78067d", "object": "response", "created_at": 1750740814, "status": "completed", "background": false, "error": null, "incomplete_details": null, "instructions": null, "max_output_tokens": 1024, "model": "gpt-4o-mini-2024-07-18", "output": [{"id": "msg_685a2f4efc38819b85c47cfcc197719a0ca742988b78067d", "type": "message", "status": "completed", "content": [{"type": "output_text", "annotations": [], "text": "It seems like you\'re asking about liz...', 'asctime': '2025-06-23 21:53:36,902'}
+2025-06-23 21:53:36,902 - claude_code_proxy.server - INFO - handle_anthropic:231 - Response converted to Anthropic: {"id": "msg_e24e6afdf15a40d18145621f6086788c", "type": "message", "role": "assistant", "content": [{"type": "text", "text": "It seems like you're asking about lizards. Could you clarify what specific aspect you're interested in? Here are a few possibilities:\n\n- **Biology**: Information about their anatomy, behavior, or habitat.\n- **Ecology**: Their role in ecosystems or interactions with other species.\n- **Pets**: Care requirements or types of lizards that can be kept as pets.\n- **Cultural  - /home/agentydragon/claude-code-proxy/claude_code_proxy/server.py - Extras: {'message': 'Response converted to Anthropic: {"id": "msg_e24e6afdf15a40d18145621f6086788c", "type": "message", "role": "assistant", "content": [{"type": "text", "text": "It seems like you\'re asking about lizards. Could you clarify what specific aspect you\'re interested in? Here are a few possibilities:\\n\\n- **Biology**: Information about their anatomy, behavior, or habitat.\\n- **Ecology**: Their role in ecosystems or interactions with other species.\\n- **Pets**: Care requirements or types of lizards that can be kept as pets.\\n- **Cultural ', 'asctime': '2025-06-23 21:53:36,902'}</pre></td>
+                </tr>
+            
+                <tr>
+                    <td>with_system<br>System prompt handling</td>
+                    <td><pre>{
+  "max_tokens": 1024,
+  "messages": [
+    {
+      "content": "why lizard",
+      "role": "user"
+    }
+  ],
+  "model": "claude-3-5-sonnet-20241022",
+  "system": "You are a lizard."
+}</pre></td>
+                    <td><pre>{
+  "id": "msg_386e5a14b343452490a37ac87f94f843",
+  "type": "message",
+  "role": "assistant",
+  "content": [
+    {
+      "type": "text",
+      "text": "Lizards are fascinating creatures! They are adaptable, can thrive in various environments, and have unique features like the ability to shed their tails and regenerate them. Additionally, their diverse colors and patterns, along with their interesting behaviors, make them captivating to observe. What specific aspect of lizards are you curious about?"
+    }
+  ],
+  "model": "gpt-4o-mini-2024-07-18",
+  "stop_reason": "end_turn",
+  "stop_sequence": null,
+  "usage": {
+    "input_tokens": 20,
+    "output_tokens": 63
+  }
+}</pre></td>
+                    <td><pre>2025-06-23 21:53:36,903 - claude_code_proxy.server - INFO - handle_anthropic:207 - Received Anthropic request for model: claude-3-5-sonnet-20241022 - /home/agentydragon/claude-code-proxy/claude_code_proxy/server.py - Extras: {'message': 'Received Anthropic request for model: claude-3-5-sonnet-20241022', 'asctime': '2025-06-23 21:53:36,903'}
+2025-06-23 21:53:36,903 - claude_code_proxy.server - DEBUG - handle_anthropic:209 - OpenAI request: {"model": "gpt-4o-mini", "input": [{"role": "developer", "content": "You are a lizard."}, {"role": "user", "content": "why lizard"}], "max_output_tokens": 1024}... - /home/agentydragon/claude-code-proxy/claude_code_proxy/server.py - Extras: {'message': 'OpenAI request: {"model": "gpt-4o-mini", "input": [{"role": "developer", "content": "You are a lizard."}, {"role": "user", "content": "why lizard"}], "max_output_tokens": 1024}...', 'asctime': '2025-06-23 21:53:36,903'}
+2025-06-23 21:53:38,421 - claude_code_proxy.server - DEBUG - handle_anthropic:228 - OpenAI response: {"id": "resp_685a2f50f5f4819882f2948fae7c1ea609bb5cdecce42b7d", "object": "response", "created_at": 1750740816, "status": "completed", "background": false, "error": null, "incomplete_details": null, "instructions": null, "max_output_tokens": 1024, "model": "gpt-4o-mini-2024-07-18", "output": [{"id": "msg_685a2f5138788198b6a2482adf9f729909bb5cdecce42b7d", "type": "message", "status": "completed", "content": [{"type": "output_text", "annotations": [], "text": "Lizards are fascinating creatures! Th... - /home/agentydragon/claude-code-proxy/claude_code_proxy/server.py - Extras: {'message': 'OpenAI response: {"id": "resp_685a2f50f5f4819882f2948fae7c1ea609bb5cdecce42b7d", "object": "response", "created_at": 1750740816, "status": "completed", "background": false, "error": null, "incomplete_details": null, "instructions": null, "max_output_tokens": 1024, "model": "gpt-4o-mini-2024-07-18", "output": [{"id": "msg_685a2f5138788198b6a2482adf9f729909bb5cdecce42b7d", "type": "message", "status": "completed", "content": [{"type": "output_text", "annotations": [], "text": "Lizards are fascinating creatures! Th...', 'asctime': '2025-06-23 21:53:38,421'}
+2025-06-23 21:53:38,421 - claude_code_proxy.server - INFO - handle_anthropic:231 - Response converted to Anthropic: {"id": "msg_386e5a14b343452490a37ac87f94f843", "type": "message", "role": "assistant", "content": [{"type": "text", "text": "Lizards are fascinating creatures! They are adaptable, can thrive in various environments, and have unique features like the ability to shed their tails and regenerate them. Additionally, their diverse colors and patterns, along with their interesting behaviors, make them captivating to observe. What specific aspect of lizards are you curious about?"}], "model": "gpt-4o-mi - /home/agentydragon/claude-code-proxy/claude_code_proxy/server.py - Extras: {'message': 'Response converted to Anthropic: {"id": "msg_386e5a14b343452490a37ac87f94f843", "type": "message", "role": "assistant", "content": [{"type": "text", "text": "Lizards are fascinating creatures! They are adaptable, can thrive in various environments, and have unique features like the ability to shed their tails and regenerate them. Additionally, their diverse colors and patterns, along with their interesting behaviors, make them captivating to observe. What specific aspect of lizards are you curious about?"}], "model": "gpt-4o-mi', 'asctime': '2025-06-23 21:53:38,421'}</pre></td>
+                </tr>
+            
+                <tr>
+                    <td>multi_turn<br>Multi-turn conversation</td>
+                    <td><pre>{
+  "max_tokens": 1024,
+  "messages": [
+    {
+      "content": "What\u0027s 2+2?",
+      "role": "user"
+    },
+    {
+      "content": "2+2 equals 4.",
+      "role": "assistant"
+    },
+    {
+      "content": "What about 3+3?",
+      "role": "user"
+    }
+  ],
+  "model": "claude-3-5-haiku-20241022"
+}</pre></td>
+                    <td><pre>{
+  "id": "msg_5e880411c1dd488bb5311e3b6eacbcd7",
+  "type": "message",
+  "role": "assistant",
+  "content": [
+    {
+      "type": "text",
+      "text": "3+3 equals 6."
+    }
+  ],
+  "model": "gpt-4o-mini-2024-07-18",
+  "stop_reason": "end_turn",
+  "stop_sequence": null,
+  "usage": {
+    "input_tokens": 35,
+    "output_tokens": 8
+  }
+}</pre></td>
+                    <td><pre>2025-06-23 21:53:38,422 - claude_code_proxy.server - INFO - handle_anthropic:207 - Received Anthropic request for model: claude-3-5-haiku-20241022 - /home/agentydragon/claude-code-proxy/claude_code_proxy/server.py - Extras: {'message': 'Received Anthropic request for model: claude-3-5-haiku-20241022', 'asctime': '2025-06-23 21:53:38,422'}
+2025-06-23 21:53:38,422 - claude_code_proxy.server - DEBUG - handle_anthropic:209 - OpenAI request: {"model": "gpt-4o-mini", "input": [{"role": "user", "content": "What's 2+2?"}, {"role": "assistant", "content": "2+2 equals 4."}, {"role": "user", "content": "What about 3+3?"}], "max_output_tokens": 1024}... - /home/agentydragon/claude-code-proxy/claude_code_proxy/server.py - Extras: {'message': 'OpenAI request: {"model": "gpt-4o-mini", "input": [{"role": "user", "content": "What\'s 2+2?"}, {"role": "assistant", "content": "2+2 equals 4."}, {"role": "user", "content": "What about 3+3?"}], "max_output_tokens": 1024}...', 'asctime': '2025-06-23 21:53:38,422'}
+2025-06-23 21:53:39,073 - claude_code_proxy.server - DEBUG - handle_anthropic:228 - OpenAI response: {"id": "resp_685a2f527ce88198a898cb1ff7996b3609b49bc2c0451293", "object": "response", "created_at": 1750740818, "status": "completed", "background": false, "error": null, "incomplete_details": null, "instructions": null, "max_output_tokens": 1024, "model": "gpt-4o-mini-2024-07-18", "output": [{"id": "msg_685a2f52e1f081989ec5a1b1259d462509b49bc2c0451293", "type": "message", "status": "completed", "content": [{"type": "output_text", "annotations": [], "text": "3+3 equals 6."}], "role": "assistant"... - /home/agentydragon/claude-code-proxy/claude_code_proxy/server.py - Extras: {'message': 'OpenAI response: {"id": "resp_685a2f527ce88198a898cb1ff7996b3609b49bc2c0451293", "object": "response", "created_at": 1750740818, "status": "completed", "background": false, "error": null, "incomplete_details": null, "instructions": null, "max_output_tokens": 1024, "model": "gpt-4o-mini-2024-07-18", "output": [{"id": "msg_685a2f52e1f081989ec5a1b1259d462509b49bc2c0451293", "type": "message", "status": "completed", "content": [{"type": "output_text", "annotations": [], "text": "3+3 equals 6."}], "role": "assistant"...', 'asctime': '2025-06-23 21:53:39,073'}
+2025-06-23 21:53:39,073 - claude_code_proxy.server - INFO - handle_anthropic:231 - Response converted to Anthropic: {"id": "msg_5e880411c1dd488bb5311e3b6eacbcd7", "type": "message", "role": "assistant", "content": [{"type": "text", "text": "3+3 equals 6."}], "model": "gpt-4o-mini-2024-07-18", "stop_reason": "end_turn", "stop_sequence": null, "usage": {"input_tokens": 35, "output_tokens": 8}} - /home/agentydragon/claude-code-proxy/claude_code_proxy/server.py - Extras: {'message': 'Response converted to Anthropic: {"id": "msg_5e880411c1dd488bb5311e3b6eacbcd7", "type": "message", "role": "assistant", "content": [{"type": "text", "text": "3+3 equals 6."}], "model": "gpt-4o-mini-2024-07-18", "stop_reason": "end_turn", "stop_sequence": null, "usage": {"input_tokens": 35, "output_tokens": 8}}', 'asctime': '2025-06-23 21:53:39,073'}</pre></td>
+                </tr>
+            
+                <tr>
+                    <td>structured_content<br>Structured content blocks</td>
+                    <td><pre>{
+  "max_tokens": 1024,
+  "messages": [
+    {
+      "content": [
+        {
+          "text": "What is:",
+          "type": "text"
+        },
+        {
+          "text": "Lizard???",
+          "type": "text"
+        }
+      ],
+      "role": "user"
+    }
+  ],
+  "model": "claude-3-5-haiku-20241022"
+}</pre></td>
+                    <td><pre>{
+  "id": "msg_a70fb55ec8b64329a8e4f9ca1c3e7fca",
+  "type": "message",
+  "role": "assistant",
+  "content": [
+    {
+      "type": "text",
+      "text": "Lizards are a diverse group of reptiles that belong to the order Squamata. They are characterized by their elongated bodies, four legs, and in most species, a long tail. Lizards are found in a variety of habitats around the world, excluding extreme environments like polar regions.\n\nHere are some key features of lizards:\n\n- **Diversity**: There are over 6,000 species of lizards, ranging from tiny geckos to large monitor lizards.\n- **Adaptability**: They can live in various environments, from deserts to rainforests.\n- **Diet**: Most lizards are insectivorous, but some are herbivorous or carnivorous.\n- **Defense Mechanisms**: Many lizards can shed their tails to escape predators, and some can even change color for camouflage.\n- **Reproduction**: Most lizards lay eggs, but some species give live birth.\n\nIf you have a specific aspect of lizards in mind, feel free to ask!"
+    }
+  ],
+  "model": "gpt-4o-mini-2024-07-18",
+  "stop_reason": "end_turn",
+  "stop_sequence": null,
+  "usage": {
+    "input_tokens": 13,
+    "output_tokens": 203
+  }
+}</pre></td>
+                    <td><pre>2025-06-23 21:53:39,074 - claude_code_proxy.server - INFO - handle_anthropic:207 - Received Anthropic request for model: claude-3-5-haiku-20241022 - /home/agentydragon/claude-code-proxy/claude_code_proxy/server.py - Extras: {'message': 'Received Anthropic request for model: claude-3-5-haiku-20241022', 'asctime': '2025-06-23 21:53:39,074'}
+2025-06-23 21:53:39,074 - claude_code_proxy.server - DEBUG - handle_anthropic:209 - OpenAI request: {"model": "gpt-4o-mini", "input": [{"role": "user", "content": "What is:\nLizard???"}], "max_output_tokens": 1024}... - /home/agentydragon/claude-code-proxy/claude_code_proxy/server.py - Extras: {'message': 'OpenAI request: {"model": "gpt-4o-mini", "input": [{"role": "user", "content": "What is:\\nLizard???"}], "max_output_tokens": 1024}...', 'asctime': '2025-06-23 21:53:39,074'}
+2025-06-23 21:53:42,996 - claude_code_proxy.server - DEBUG - handle_anthropic:228 - OpenAI response: {"id": "resp_685a2f53237c8199a1932078e0de40590178dfec87353e45", "object": "response", "created_at": 1750740819, "status": "completed", "background": false, "error": null, "incomplete_details": null, "instructions": null, "max_output_tokens": 1024, "model": "gpt-4o-mini-2024-07-18", "output": [{"id": "msg_685a2f538b20819994057e952f6df7390178dfec87353e45", "type": "message", "status": "completed", "content": [{"type": "output_text", "annotations": [], "text": "Lizards are a diverse group of reptil... - /home/agentydragon/claude-code-proxy/claude_code_proxy/server.py - Extras: {'message': 'OpenAI response: {"id": "resp_685a2f53237c8199a1932078e0de40590178dfec87353e45", "object": "response", "created_at": 1750740819, "status": "completed", "background": false, "error": null, "incomplete_details": null, "instructions": null, "max_output_tokens": 1024, "model": "gpt-4o-mini-2024-07-18", "output": [{"id": "msg_685a2f538b20819994057e952f6df7390178dfec87353e45", "type": "message", "status": "completed", "content": [{"type": "output_text", "annotations": [], "text": "Lizards are a diverse group of reptil...', 'asctime': '2025-06-23 21:53:42,996'}
+2025-06-23 21:53:42,996 - claude_code_proxy.server - INFO - handle_anthropic:231 - Response converted to Anthropic: {"id": "msg_a70fb55ec8b64329a8e4f9ca1c3e7fca", "type": "message", "role": "assistant", "content": [{"type": "text", "text": "Lizards are a diverse group of reptiles that belong to the order Squamata. They are characterized by their elongated bodies, four legs, and in most species, a long tail. Lizards are found in a variety of habitats around the world, excluding extreme environments like polar regions.\n\nHere are some key features of lizards:\n\n- **Diversity**: There are over 6,000 species of - /home/agentydragon/claude-code-proxy/claude_code_proxy/server.py - Extras: {'message': 'Response converted to Anthropic: {"id": "msg_a70fb55ec8b64329a8e4f9ca1c3e7fca", "type": "message", "role": "assistant", "content": [{"type": "text", "text": "Lizards are a diverse group of reptiles that belong to the order Squamata. They are characterized by their elongated bodies, four legs, and in most species, a long tail. Lizards are found in a variety of habitats around the world, excluding extreme environments like polar regions.\\n\\nHere are some key features of lizards:\\n\\n- **Diversity**: There are over 6,000 species of', 'asctime': '2025-06-23 21:53:42,996'}</pre></td>
+                </tr>
+            
+                <tr>
+                    <td>tool_definition<br>Tool definition and auto mode</td>
+                    <td><pre>{
+  "max_tokens": 1024,
+  "messages": [
+    {
+      "content": "weather in New York?",
+      "role": "user"
+    }
+  ],
+  "model": "claude-3-5-sonnet-20241022",
+  "tool_choice": {
+    "type": "auto"
+  },
+  "tools": [
+    {
+      "description": "Get weather",
+      "input_schema": {
+        "properties": {
+          "location": {
+            "description": "City and state, e.g. San Francisco, CA",
+            "type": "string"
+          },
+          "unit": {
+            "enum": [
+              "celsius",
+              "fahrenheit"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "location"
+        ],
+        "type": "object"
+      },
+      "name": "get_weather"
+    }
+  ]
+}</pre></td>
+                    <td><pre>{
+  "id": "msg_e8824fca1fd44eee9ab4c3da0842ebe0",
+  "type": "message",
+  "role": "assistant",
+  "content": [
+    {
+      "type": "tool_use",
+      "id": "call_tdjTsUCAFt7e6fBlVq2IQAKi",
+      "name": "get_weather",
+      "input": {
+        "location": "New York, NY"
+      }
+    }
+  ],
+  "model": "gpt-4o-mini-2024-07-18",
+  "stop_reason": "end_turn",
+  "stop_sequence": null,
+  "usage": {
+    "input_tokens": 63,
+    "output_tokens": 18
+  }
+}</pre></td>
+                    <td><pre>2025-06-23 21:53:42,997 - claude_code_proxy.server - INFO - handle_anthropic:207 - Received Anthropic request for model: claude-3-5-sonnet-20241022 - /home/agentydragon/claude-code-proxy/claude_code_proxy/server.py - Extras: {'message': 'Received Anthropic request for model: claude-3-5-sonnet-20241022', 'asctime': '2025-06-23 21:53:42,997'}
+2025-06-23 21:53:42,997 - claude_code_proxy.server - DEBUG - handle_anthropic:209 - OpenAI request: {"model": "gpt-4o-mini", "input": [{"role": "user", "content": "weather in New York?"}], "max_output_tokens": 1024, "tools": [{"type": "function", "name": "get_weather", "description": "Get weather", "parameters": {"type": "object", "properties": {"location": {"type": "string", "description": "City and state, e.g. San Francisco, CA"}, "unit": {"type": "string", "enum": ["celsius", "fahrenheit"]}}, "required": ["location"]}}], "tool_choice": "auto"}... - /home/agentydragon/claude-code-proxy/claude_code_proxy/server.py - Extras: {'message': 'OpenAI request: {"model": "gpt-4o-mini", "input": [{"role": "user", "content": "weather in New York?"}], "max_output_tokens": 1024, "tools": [{"type": "function", "name": "get_weather", "description": "Get weather", "parameters": {"type": "object", "properties": {"location": {"type": "string", "description": "City and state, e.g. San Francisco, CA"}, "unit": {"type": "string", "enum": ["celsius", "fahrenheit"]}}, "required": ["location"]}}], "tool_choice": "auto"}...', 'asctime': '2025-06-23 21:53:42,997'}
+2025-06-23 21:53:44,078 - claude_code_proxy.server - DEBUG - handle_anthropic:228 - OpenAI response: {"id": "resp_685a2f5711b0819bbb65f88e46f0ff9702061eee75d40902", "object": "response", "created_at": 1750740823, "status": "completed", "background": false, "error": null, "incomplete_details": null, "instructions": null, "max_output_tokens": 1024, "model": "gpt-4o-mini-2024-07-18", "output": [{"id": "fc_685a2f57c614819b8c4815761563674c02061eee75d40902", "type": "function_call", "status": "completed", "arguments": "{\"location\":\"New York, NY\"}", "call_id": "call_tdjTsUCAFt7e6fBlVq2IQAKi", "nam... - /home/agentydragon/claude-code-proxy/claude_code_proxy/server.py - Extras: {'message': 'OpenAI response: {"id": "resp_685a2f5711b0819bbb65f88e46f0ff9702061eee75d40902", "object": "response", "created_at": 1750740823, "status": "completed", "background": false, "error": null, "incomplete_details": null, "instructions": null, "max_output_tokens": 1024, "model": "gpt-4o-mini-2024-07-18", "output": [{"id": "fc_685a2f57c614819b8c4815761563674c02061eee75d40902", "type": "function_call", "status": "completed", "arguments": "{\\"location\\":\\"New York, NY\\"}", "call_id": "call_tdjTsUCAFt7e6fBlVq2IQAKi", "nam...', 'asctime': '2025-06-23 21:53:44,078'}
+2025-06-23 21:53:44,078 - claude_code_proxy.server - INFO - handle_anthropic:231 - Response converted to Anthropic: {"id": "msg_e8824fca1fd44eee9ab4c3da0842ebe0", "type": "message", "role": "assistant", "content": [{"type": "tool_use", "id": "call_tdjTsUCAFt7e6fBlVq2IQAKi", "name": "get_weather", "input": {"location": "New York, NY"}}], "model": "gpt-4o-mini-2024-07-18", "stop_reason": "end_turn", "stop_sequence": null, "usage": {"input_tokens": 63, "output_tokens": 18}} - /home/agentydragon/claude-code-proxy/claude_code_proxy/server.py - Extras: {'message': 'Response converted to Anthropic: {"id": "msg_e8824fca1fd44eee9ab4c3da0842ebe0", "type": "message", "role": "assistant", "content": [{"type": "tool_use", "id": "call_tdjTsUCAFt7e6fBlVq2IQAKi", "name": "get_weather", "input": {"location": "New York, NY"}}], "model": "gpt-4o-mini-2024-07-18", "stop_reason": "end_turn", "stop_sequence": null, "usage": {"input_tokens": 63, "output_tokens": 18}}', 'asctime': '2025-06-23 21:53:44,078'}</pre></td>
+                </tr>
+            
+                <tr>
+                    <td>tool_use_flow<br>Complete tool use conversation</td>
+                    <td><pre>{
+  "max_tokens": 1024,
+  "messages": [
+    {
+      "content": "weather Paris",
+      "role": "user"
+    },
+    {
+      "content": [
+        {
+          "text": "I\u0027ll check.",
+          "type": "text"
+        },
+        {
+          "id": "toolu_01234",
+          "input": {
+            "location": "Paris, France",
+            "unit": "celsius"
+          },
+          "name": "get_weather",
+          "type": "tool_use"
+        }
+      ],
+      "role": "assistant"
+    },
+    {
+      "content": [
+        {
+          "content": "Temperature: 22\u00b0C, Conditions: Sunny, Humidity: 45%",
+          "tool_use_id": "toolu_01234",
+          "type": "tool_result"
+        }
+      ],
+      "role": "user"
+    },
+    {
+      "content": "22\u00b0C, sunny, 45% humidity.",
+      "role": "assistant"
+    }
+  ],
+  "model": "claude-3-5-haiku-20241022"
+}</pre></td>
+                    <td><pre>{
+  "id": "msg_f1391eee2d094b7ca58ff3d00027e948",
+  "type": "message",
+  "role": "assistant",
+  "content": [
+    {
+      "type": "text",
+      "text": "The current weather in Paris is 22\u00b0C, with sunny conditions and 45% humidity. Enjoy your day!"
+    }
+  ],
+  "model": "gpt-4o-mini-2024-07-18",
+  "stop_reason": "end_turn",
+  "stop_sequence": null,
+  "usage": {
+    "input_tokens": 76,
+    "output_tokens": 24
+  }
+}</pre></td>
+                    <td><pre>2025-06-23 21:53:44,079 - claude_code_proxy.server - INFO - handle_anthropic:207 - Received Anthropic request for model: claude-3-5-haiku-20241022 - /home/agentydragon/claude-code-proxy/claude_code_proxy/server.py - Extras: {'message': 'Received Anthropic request for model: claude-3-5-haiku-20241022', 'asctime': '2025-06-23 21:53:44,079'}
+2025-06-23 21:53:44,080 - claude_code_proxy.server - DEBUG - handle_anthropic:209 - OpenAI request: {"model": "gpt-4o-mini", "input": [{"role": "user", "content": "weather Paris"}, {"role": "assistant", "content": "I'll check."}, {"type": "function_call", "name": "get_weather", "arguments": "{\"location\": \"Paris, France\", \"unit\": \"celsius\"}", "call_id": "toolu_01234"}, {"type": "function_call_output", "call_id": "toolu_01234", "output": "Temperature: 22\u00b0C, Conditions: Sunny, Humidity: 45%"}, {"role": "assistant", "content": "22\u00b0C, sunny, 45% humidity."}], "max_output_tokens": ... - /home/agentydragon/claude-code-proxy/claude_code_proxy/server.py - Extras: {'message': 'OpenAI request: {"model": "gpt-4o-mini", "input": [{"role": "user", "content": "weather Paris"}, {"role": "assistant", "content": "I\'ll check."}, {"type": "function_call", "name": "get_weather", "arguments": "{\\"location\\": \\"Paris, France\\", \\"unit\\": \\"celsius\\"}", "call_id": "toolu_01234"}, {"type": "function_call_output", "call_id": "toolu_01234", "output": "Temperature: 22\\u00b0C, Conditions: Sunny, Humidity: 45%"}, {"role": "assistant", "content": "22\\u00b0C, sunny, 45% humidity."}], "max_output_tokens": ...', 'asctime': '2025-06-23 21:53:44,080'}
+2025-06-23 21:53:44,987 - claude_code_proxy.server - DEBUG - handle_anthropic:228 - OpenAI response: {"id": "resp_685a2f5825308199bbe4e7afcbe087f90e2074ceb47b92bd", "object": "response", "created_at": 1750740824, "status": "completed", "background": false, "error": null, "incomplete_details": null, "instructions": null, "max_output_tokens": 1024, "model": "gpt-4o-mini-2024-07-18", "output": [{"id": "msg_685a2f5895808199aacccef4f819835f0e2074ceb47b92bd", "type": "message", "status": "completed", "content": [{"type": "output_text", "annotations": [], "text": "The current weather in Paris is 22\u0... - /home/agentydragon/claude-code-proxy/claude_code_proxy/server.py - Extras: {'message': 'OpenAI response: {"id": "resp_685a2f5825308199bbe4e7afcbe087f90e2074ceb47b92bd", "object": "response", "created_at": 1750740824, "status": "completed", "background": false, "error": null, "incomplete_details": null, "instructions": null, "max_output_tokens": 1024, "model": "gpt-4o-mini-2024-07-18", "output": [{"id": "msg_685a2f5895808199aacccef4f819835f0e2074ceb47b92bd", "type": "message", "status": "completed", "content": [{"type": "output_text", "annotations": [], "text": "The current weather in Paris is 22\\u0...', 'asctime': '2025-06-23 21:53:44,987'}
+2025-06-23 21:53:44,987 - claude_code_proxy.server - INFO - handle_anthropic:231 - Response converted to Anthropic: {"id": "msg_f1391eee2d094b7ca58ff3d00027e948", "type": "message", "role": "assistant", "content": [{"type": "text", "text": "The current weather in Paris is 22\u00b0C, with sunny conditions and 45% humidity. Enjoy your day!"}], "model": "gpt-4o-mini-2024-07-18", "stop_reason": "end_turn", "stop_sequence": null, "usage": {"input_tokens": 76, "output_tokens": 24}} - /home/agentydragon/claude-code-proxy/claude_code_proxy/server.py - Extras: {'message': 'Response converted to Anthropic: {"id": "msg_f1391eee2d094b7ca58ff3d00027e948", "type": "message", "role": "assistant", "content": [{"type": "text", "text": "The current weather in Paris is 22\\u00b0C, with sunny conditions and 45% humidity. Enjoy your day!"}], "model": "gpt-4o-mini-2024-07-18", "stop_reason": "end_turn", "stop_sequence": null, "usage": {"input_tokens": 76, "output_tokens": 24}}', 'asctime': '2025-06-23 21:53:44,987'}</pre></td>
+                </tr>
+            
+                <tr>
+                    <td>thinking_block<br>Thinking block filtering (Anthropic-specific)</td>
+                    <td><pre>{
+  "max_tokens": 1024,
+  "messages": [
+    {
+      "content": "Explain recursion",
+      "role": "user"
+    },
+    {
+      "content": [
+        {
+          "signature": "EtMFCkYIBBgCKkCUFMbgAiGkpoL7NGc5Kj7f6u3I",
+          "thinking": "The user wants an explanation of recursion. I should provide a clear, simple explanation.",
+          "type": "thinking"
+        },
+        {
+          "text": "hiss",
+          "type": "text"
+        }
+      ],
+      "role": "assistant"
+    }
+  ],
+  "model": "claude-3-5-sonnet-20241022"
+}</pre></td>
+                    <td><pre>{
+  "id": "msg_dfa9af14bc0a4f16ac95a7f0424a2422",
+  "type": "message",
+  "role": "assistant",
+  "content": [
+    {
+      "type": "text",
+      "text": "Recursion is a programming and mathematical concept where a function calls itself to solve a problem. It typically consists of two main components:\n\n1. **Base Case**: This is a condition that stops the recursion. It prevents the function from calling itself indefinitely. The base case is essential for the recursion to eventually terminate.\n\n2. **Recursive Case**: This involves the function calling itself with a modified argument, moving closer to the base case. The recursive case is where the main problem is broken down into smaller, more manageable parts.\n\n### How It Works\n\nHere's a simple example of recursion using the calculation of a factorial:\n\n- **Factorial Definition**: The factorial of a number \\( n \\) (denoted as \\( n! \\)) is the product of all positive integers up to \\( n \\).\n  - \\( n! = n \\times (n-1)! \\)\n  - Base Case: \\( 0! = 1 \\)\n\n### Example Function (in pseudo-code):\n```plaintext\nfunction factorial(n):\n    if n == 0:\n        return 1         // Base case\n    else:\n        return n * factorial(n - 1) // Recursive case\n```\n\n### Key Points:\n- **Stack Memory**: Each recursive call consumes stack memory. If too many recursive calls are made, it may lead to a stack overflow.\n- **Efficiency**: Recursive solutions can sometimes be less efficient than iterative solutions due to overhead and repeated calculations, unless optimizations like memoization are applied.\n- **Think Recursively**: When designing a recursive solution, it's often beneficial to think about how to divide the problem into smaller parts.\n\nRecursion can be very powerful and elegant, especially for problems like traversing trees or implementing algorithms such as quicksort, mergesort, and more."
+    }
+  ],
+  "model": "gpt-4o-mini-2024-07-18",
+  "stop_reason": "end_turn",
+  "stop_sequence": null,
+  "usage": {
+    "input_tokens": 15,
+    "output_tokens": 365
+  }
+}</pre></td>
+                    <td><pre>2025-06-23 21:53:44,987 - claude_code_proxy.server - INFO - handle_anthropic:207 - Received Anthropic request for model: claude-3-5-sonnet-20241022 - /home/agentydragon/claude-code-proxy/claude_code_proxy/server.py - Extras: {'message': 'Received Anthropic request for model: claude-3-5-sonnet-20241022', 'asctime': '2025-06-23 21:53:44,987'}
+2025-06-23 21:53:44,987 - claude_code_proxy.converter_v2 - DEBUG - _convert_message_to_input:270 - Skipping thinking block - /home/agentydragon/claude-code-proxy/claude_code_proxy/converter_v2.py - Extras: {'message': 'Skipping thinking block', 'asctime': '2025-06-23 21:53:44,987'}
+2025-06-23 21:53:44,988 - claude_code_proxy.server - DEBUG - handle_anthropic:209 - OpenAI request: {"model": "gpt-4o-mini", "input": [{"role": "user", "content": "Explain recursion"}, {"role": "assistant", "content": "hiss"}], "max_output_tokens": 1024}... - /home/agentydragon/claude-code-proxy/claude_code_proxy/server.py - Extras: {'message': 'OpenAI request: {"model": "gpt-4o-mini", "input": [{"role": "user", "content": "Explain recursion"}, {"role": "assistant", "content": "hiss"}], "max_output_tokens": 1024}...', 'asctime': '2025-06-23 21:53:44,988'}
+2025-06-23 21:53:51,043 - claude_code_proxy.server - DEBUG - handle_anthropic:228 - OpenAI response: {"id": "resp_685a2f590c248198b65954a6ed60cc6601a644700303505b", "object": "response", "created_at": 1750740825, "status": "completed", "background": false, "error": null, "incomplete_details": null, "instructions": null, "max_output_tokens": 1024, "model": "gpt-4o-mini-2024-07-18", "output": [{"id": "msg_685a2f595f5481988e32dafd71ad034f01a644700303505b", "type": "message", "status": "completed", "content": [{"type": "output_text", "annotations": [], "text": "Recursion is a programming and mathem... - /home/agentydragon/claude-code-proxy/claude_code_proxy/server.py - Extras: {'message': 'OpenAI response: {"id": "resp_685a2f590c248198b65954a6ed60cc6601a644700303505b", "object": "response", "created_at": 1750740825, "status": "completed", "background": false, "error": null, "incomplete_details": null, "instructions": null, "max_output_tokens": 1024, "model": "gpt-4o-mini-2024-07-18", "output": [{"id": "msg_685a2f595f5481988e32dafd71ad034f01a644700303505b", "type": "message", "status": "completed", "content": [{"type": "output_text", "annotations": [], "text": "Recursion is a programming and mathem...', 'asctime': '2025-06-23 21:53:51,043'}
+2025-06-23 21:53:51,043 - claude_code_proxy.server - INFO - handle_anthropic:231 - Response converted to Anthropic: {"id": "msg_dfa9af14bc0a4f16ac95a7f0424a2422", "type": "message", "role": "assistant", "content": [{"type": "text", "text": "Recursion is a programming and mathematical concept where a function calls itself to solve a problem. It typically consists of two main components:\n\n1. **Base Case**: This is a condition that stops the recursion. It prevents the function from calling itself indefinitely. The base case is essential for the recursion to eventually terminate.\n\n2. **Recursive Case**: This  - /home/agentydragon/claude-code-proxy/claude_code_proxy/server.py - Extras: {'message': 'Response converted to Anthropic: {"id": "msg_dfa9af14bc0a4f16ac95a7f0424a2422", "type": "message", "role": "assistant", "content": [{"type": "text", "text": "Recursion is a programming and mathematical concept where a function calls itself to solve a problem. It typically consists of two main components:\\n\\n1. **Base Case**: This is a condition that stops the recursion. It prevents the function from calling itself indefinitely. The base case is essential for the recursion to eventually terminate.\\n\\n2. **Recursive Case**: This ', 'asctime': '2025-06-23 21:53:51,043'}</pre></td>
+                </tr>
+            
+                <tr>
+                    <td>parameters<br>Various parameters (temperature, top_p, stop)</td>
+                    <td><pre>{
+  "max_tokens": 200,
+  "messages": [
+    {
+      "content": "What is lizard",
+      "role": "user"
+    }
+  ],
+  "model": "claude-3-5-haiku-20241022",
+  "stop_sequences": [
+    "\\n\\n",
+    "END"
+  ],
+  "temperature": 0.7,
+  "top_p": 0.9
+}</pre></td>
+                    <td><pre>{
+  "id": "msg_dbce98c466ee40cd8b45a2f75d863b15",
+  "type": "message",
+  "role": "assistant",
+  "content": [
+    {
+      "type": "text",
+      "text": "Lizards are a diverse group of reptiles belonging to the order Squamata, which also includes snakes. They are characterized by their scaly skin, external ear openings, and, typically, four limbs. Lizards can be found in various habitats around the world, from deserts to forests. \n\n### Key Features:\n- **Body Structure**: Most lizards have elongated bodies, a long tail, and a distinct head. \n- **Diet**: They are generally insectivorous, but some species are herbivorous or omnivorous.\n- **Behavior**: Many lizards are known for their ability to regenerate their tails if lost, a defense mechanism against predators.\n- **Habitat**: They can live in trees, on the ground, or even in water, depending on the species.\n\n### Common Types:\n- **Geckos**: Known for their vocalizations and ability to climb walls.\n- **Iguanas**: Larger lizards that are often found in tropical regions"
+    }
+  ],
+  "model": "gpt-4o-mini-2024-07-18",
+  "stop_reason": "max_tokens",
+  "stop_sequence": null,
+  "usage": {
+    "input_tokens": 11,
+    "output_tokens": 200
+  }
+}</pre></td>
+                    <td><pre>2025-06-23 21:53:51,044 - claude_code_proxy.server - INFO - handle_anthropic:207 - Received Anthropic request for model: claude-3-5-haiku-20241022 - /home/agentydragon/claude-code-proxy/claude_code_proxy/server.py - Extras: {'message': 'Received Anthropic request for model: claude-3-5-haiku-20241022', 'asctime': '2025-06-23 21:53:51,044'}
+2025-06-23 21:53:51,044 - claude_code_proxy.server - DEBUG - handle_anthropic:209 - OpenAI request: {"model": "gpt-4o-mini", "input": [{"role": "user", "content": "What is lizard"}], "max_output_tokens": 200, "temperature": 0.7, "top_p": 0.9}... - /home/agentydragon/claude-code-proxy/claude_code_proxy/server.py - Extras: {'message': 'OpenAI request: {"model": "gpt-4o-mini", "input": [{"role": "user", "content": "What is lizard"}], "max_output_tokens": 200, "temperature": 0.7, "top_p": 0.9}...', 'asctime': '2025-06-23 21:53:51,044'}
+2025-06-23 21:53:53,834 - claude_code_proxy.server - DEBUG - handle_anthropic:228 - OpenAI response: {"id": "resp_685a2f5f1aa4819aa2bab919ef61003404b52ad58098f964", "object": "response", "created_at": 1750740831, "status": "incomplete", "background": false, "error": null, "incomplete_details": {"reason": "max_output_tokens"}, "instructions": null, "max_output_tokens": 200, "model": "gpt-4o-mini-2024-07-18", "output": [{"id": "msg_685a2f5f7f80819aac592202b801724f04b52ad58098f964", "type": "message", "status": "incomplete", "content": [{"type": "output_text", "annotations": [], "text": "Lizards a... - /home/agentydragon/claude-code-proxy/claude_code_proxy/server.py - Extras: {'message': 'OpenAI response: {"id": "resp_685a2f5f1aa4819aa2bab919ef61003404b52ad58098f964", "object": "response", "created_at": 1750740831, "status": "incomplete", "background": false, "error": null, "incomplete_details": {"reason": "max_output_tokens"}, "instructions": null, "max_output_tokens": 200, "model": "gpt-4o-mini-2024-07-18", "output": [{"id": "msg_685a2f5f7f80819aac592202b801724f04b52ad58098f964", "type": "message", "status": "incomplete", "content": [{"type": "output_text", "annotations": [], "text": "Lizards a...', 'asctime': '2025-06-23 21:53:53,834'}
+2025-06-23 21:53:53,834 - claude_code_proxy.server - INFO - handle_anthropic:231 - Response converted to Anthropic: {"id": "msg_dbce98c466ee40cd8b45a2f75d863b15", "type": "message", "role": "assistant", "content": [{"type": "text", "text": "Lizards are a diverse group of reptiles belonging to the order Squamata, which also includes snakes. They are characterized by their scaly skin, external ear openings, and, typically, four limbs. Lizards can be found in various habitats around the world, from deserts to forests. \n\n### Key Features:\n- **Body Structure**: Most lizards have elongated bodies, a long tail, a - /home/agentydragon/claude-code-proxy/claude_code_proxy/server.py - Extras: {'message': 'Response converted to Anthropic: {"id": "msg_dbce98c466ee40cd8b45a2f75d863b15", "type": "message", "role": "assistant", "content": [{"type": "text", "text": "Lizards are a diverse group of reptiles belonging to the order Squamata, which also includes snakes. They are characterized by their scaly skin, external ear openings, and, typically, four limbs. Lizards can be found in various habitats around the world, from deserts to forests. \\n\\n### Key Features:\\n- **Body Structure**: Most lizards have elongated bodies, a long tail, a', 'asctime': '2025-06-23 21:53:53,834'}</pre></td>
+                </tr>
+            
+                <tr>
+                    <td>streaming<br>Streaming response</td>
+                    <td><pre>{
+  "max_tokens": 1024,
+  "messages": [
+    {
+      "content": "why lizard",
+      "role": "user"
+    }
+  ],
+  "model": "claude-3-5-haiku-20241022",
+  "stream": true
+}</pre></td>
+                    <td><pre>'event: message_start\n'
+
+'data: {"type": "message_start", "message": {"id": "msg_41ad9a39282149ba903847b3f7574df9", "type": "message", "role": "assistant", "content": [], "model": "gpt-4o-mini", "stop_reason": null, "stop_sequence": null, "usage": {"input_tokens": 0, "output_tokens": 0}}}\n\n'
+
+'event: content_block_start\n'
+
+'data: {"type": "content_block_start", "index": 0, "content_block": {"type": "text", "text": ""}}\n\n'
+
+'event: content_block_delta\n'
+
+'data: {"type": "content_block_delta", "index": 0, "delta": {"type": "text_delta", "text": "Could"}}\n\n'
+
+'event: content_block_delta\n'
+
+'data: {"type": "content_block_delta", "index": 0, "delta": {"type": "text_delta", "text": " you"}}\n\n'
+
+'event: content_block_delta\n'
+
+'data: {"type": "content_block_delta", "index": 0, "delta": {"type": "text_delta", "text": " clarify"}}\n\n'
+
+'event: content_block_delta\n'
+
+'data: {"type": "content_block_delta", "index": 0, "delta": {"type": "text_delta", "text": " what"}}\n\n'
+
+'event: content_block_delta\n'
+
+'data: {"type": "content_block_delta", "index": 0, "delta": {"type": "text_delta", "text": " you"}}\n\n'
+
+'event: content_block_delta\n'
+
+'data: {"type": "content_block_delta", "index": 0, "delta": {"type": "text_delta", "text": " mean"}}\n\n'
+
+'event: content_block_delta\n'
+
+'data: {"type": "content_block_delta", "index": 0, "delta": {"type": "text_delta", "text": " by"}}\n\n'
+
+'event: content_block_delta\n'
+
+'data: {"type": "content_block_delta", "index": 0, "delta": {"type": "text_delta", "text": " \\""}}\n\n'
+
+'event: content_block_delta\n'
+
+'data: {"type": "content_block_delta", "index": 0, "delta": {"type": "text_delta", "text": "why"}}\n\n'
+
+'event: content_block_delta\n'
+
+'data: {"type": "content_block_delta", "index": 0, "delta": {"type": "text_delta", "text": " l"}}\n\n'
+
+'event: content_block_delta\n'
+
+'data: {"type": "content_block_delta", "index": 0, "delta": {"type": "text_delta", "text": "izard"}}\n\n'
+
+'event: content_block_delta\n'
+
+'data: {"type": "content_block_delta", "index": 0, "delta": {"type": "text_delta", "text": "\\"?"}}\n\n'
+
+'event: content_block_delta\n'
+
+'data: {"type": "content_block_delta", "index": 0, "delta": {"type": "text_delta", "text": " Are"}}\n\n'
+
+'event: content_block_delta\n'
+
+'data: {"type": "content_block_delta", "index": 0, "delta": {"type": "text_delta", "text": " you"}}\n\n'
+
+'event: content_block_delta\n'
+
+'data: {"type": "content_block_delta", "index": 0, "delta": {"type": "text_delta", "text": " asking"}}\n\n'
+
+'event: content_block_delta\n'
+
+'data: {"type": "content_block_delta", "index": 0, "delta": {"type": "text_delta", "text": " about"}}\n\n'
+
+'event: content_block_delta\n'
+
+'data: {"type": "content_block_delta", "index": 0, "delta": {"type": "text_delta", "text": " the"}}\n\n'
+
+'event: content_block_delta\n'
+
+'data: {"type": "content_block_delta", "index": 0, "delta": {"type": "text_delta", "text": " ecological"}}\n\n'
+
+'event: content_block_delta\n'
+
+'data: {"type": "content_block_delta", "index": 0, "delta": {"type": "text_delta", "text": " role"}}\n\n'
+
+'event: content_block_delta\n'
+
+'data: {"type": "content_block_delta", "index": 0, "delta": {"type": "text_delta", "text": " of"}}\n\n'
+
+'event: content_block_delta\n'
+
+'data: {"type": "content_block_delta", "index": 0, "delta": {"type": "text_delta", "text": " l"}}\n\n'
+
+'event: content_block_delta\n'
+
+'data: {"type": "content_block_delta", "index": 0, "delta": {"type": "text_delta", "text": "izards"}}\n\n'
+
+'event: content_block_delta\n'
+
+'data: {"type": "content_block_delta", "index": 0, "delta": {"type": "text_delta", "text": ","}}\n\n'
+
+'event: content_block_delta\n'
+
+'data: {"type": "content_block_delta", "index": 0, "delta": {"type": "text_delta", "text": " their"}}\n\n'
+
+'event: content_block_delta\n'
+
+'data: {"type": "content_block_delta", "index": 0, "delta": {"type": "text_delta", "text": " characteristics"}}\n\n'
+
+'event: content_block_delta\n'
+
+'data: {"type": "content_block_delta", "index": 0, "delta": {"type": "text_delta", "text": ","}}\n\n'
+
+'event: content_block_delta\n'
+
+'data: {"type": "content_block_delta", "index": 0, "delta": {"type": "text_delta", "text": " their"}}\n\n'
+
+'event: content_block_delta\n'
+
+'data: {"type": "content_block_delta", "index": 0, "delta": {"type": "text_delta", "text": " symbolism"}}\n\n'
+
+'event: content_block_delta\n'
+
+'data: {"type": "content_block_delta", "index": 0, "delta": {"type": "text_delta", "text": " in"}}\n\n'
+
+'event: content_block_delta\n'
+
+'data: {"type": "content_block_delta", "index": 0, "delta": {"type": "text_delta", "text": " culture"}}\n\n'
+
+'event: content_block_delta\n'
+
+'data: {"type": "content_block_delta", "index": 0, "delta": {"type": "text_delta", "text": ","}}\n\n'
+
+'event: content_block_delta\n'
+
+'data: {"type": "content_block_delta", "index": 0, "delta": {"type": "text_delta", "text": " or"}}\n\n'
+
+'event: content_block_delta\n'
+
+'data: {"type": "content_block_delta", "index": 0, "delta": {"type": "text_delta", "text": " something"}}\n\n'
+
+'event: content_block_delta\n'
+
+'data: {"type": "content_block_delta", "index": 0, "delta": {"type": "text_delta", "text": " else"}}\n\n'
+
+'event: content_block_delta\n'
+
+'data: {"type": "content_block_delta", "index": 0, "delta": {"type": "text_delta", "text": "?"}}\n\n'
+
+'event: content_block_delta\n'
+
+'data: {"type": "content_block_delta", "index": 0, "delta": {"type": "text_delta", "text": " Let"}}\n\n'
+
+'event: content_block_delta\n'
+
+'data: {"type": "content_block_delta", "index": 0, "delta": {"type": "text_delta", "text": " me"}}\n\n'
+
+'event: content_block_delta\n'
+
+'data: {"type": "content_block_delta", "index": 0, "delta": {"type": "text_delta", "text": " know"}}\n\n'
+
+'event: content_block_delta\n'
+
+'data: {"type": "content_block_delta", "index": 0, "delta": {"type": "text_delta", "text": " so"}}\n\n'
+
+'event: content_block_delta\n'
+
+'data: {"type": "content_block_delta", "index": 0, "delta": {"type": "text_delta", "text": " I"}}\n\n'
+
+'event: content_block_delta\n'
+
+'data: {"type": "content_block_delta", "index": 0, "delta": {"type": "text_delta", "text": " can"}}\n\n'
+
+'event: content_block_delta\n'
+
+'data: {"type": "content_block_delta", "index": 0, "delta": {"type": "text_delta", "text": " provide"}}\n\n'
+
+'event: content_block_delta\n'
+
+'data: {"type": "content_block_delta", "index": 0, "delta": {"type": "text_delta", "text": " a"}}\n\n'
+
+'event: content_block_delta\n'
+
+'data: {"type": "content_block_delta", "index": 0, "delta": {"type": "text_delta", "text": " more"}}\n\n'
+
+'event: content_block_delta\n'
+
+'data: {"type": "content_block_delta", "index": 0, "delta": {"type": "text_delta", "text": " detailed"}}\n\n'
+
+'event: content_block_delta\n'
+
+'data: {"type": "content_block_delta", "index": 0, "delta": {"type": "text_delta", "text": " answer"}}\n\n'
+
+'event: content_block_delta\n'
+
+'data: {"type": "content_block_delta", "index": 0, "delta": {"type": "text_delta", "text": "!"}}\n\n'</pre></td>
+                    <td><pre>2025-06-23 21:53:53,834 - claude_code_proxy.server - INFO - handle_anthropic:207 - Received Anthropic request for model: claude-3-5-haiku-20241022 - /home/agentydragon/claude-code-proxy/claude_code_proxy/server.py - Extras: {'message': 'Received Anthropic request for model: claude-3-5-haiku-20241022', 'asctime': '2025-06-23 21:53:53,834'}
+2025-06-23 21:53:53,835 - claude_code_proxy.server - DEBUG - handle_anthropic:209 - OpenAI request: {"model": "gpt-4o-mini", "input": [{"role": "user", "content": "why lizard"}], "max_output_tokens": 1024, "stream": true}... - /home/agentydragon/claude-code-proxy/claude_code_proxy/server.py - Extras: {'message': 'OpenAI request: {"model": "gpt-4o-mini", "input": [{"role": "user", "content": "why lizard"}], "max_output_tokens": 1024, "stream": true}...', 'asctime': '2025-06-23 21:53:53,835'}</pre></td>
+                </tr>
+            
+                <tr>
+                    <td>system_blocks<br>System message as content blocks</td>
+                    <td><pre>{
+  "max_tokens": 1024,
+  "messages": [
+    {
+      "content": "sort a list",
+      "role": "user"
+    }
+  ],
+  "model": "claude-3-5-sonnet-20241022",
+  "system": [
+    {
+      "text": "You are a lizard.",
+      "type": "text"
+    },
+    {
+      "text": "Write clean code.",
+      "type": "text"
+    }
+  ],
+  "temperature": 0.0
+}</pre></td>
+                    <td><pre>{
+  "id": "msg_a3b59f60b7c74582b4ae1d3bb54dbe72",
+  "type": "message",
+  "role": "assistant",
+  "content": [
+    {
+      "type": "text",
+      "text": "Sure! Here\u2019s a simple example of how to sort a list in Python:\n\n```python\n# Sample list\nmy_list = [5, 2, 9, 1, 5, 6]\n\n# Sorting the list\nsorted_list = sorted(my_list)\n\n# Output the sorted list\nprint(sorted_list)\n```\n\nIf you want to sort the list in place, you can use the `sort()` method:\n\n```python\n# Sample list\nmy_list = [5, 2, 9, 1, 5, 6]\n\n# Sorting the list in place\nmy_list.sort()\n\n# Output the sorted list\nprint(my_list)\n```\n\nBoth methods will give you the sorted list: `[1, 2, 5, 5, 6, 9]`."
+    }
+  ],
+  "model": "gpt-4o-mini-2024-07-18",
+  "stop_reason": "end_turn",
+  "stop_sequence": null,
+  "usage": {
+    "input_tokens": 24,
+    "output_tokens": 167
+  }
+}</pre></td>
+                    <td><pre>2025-06-23 21:53:55,065 - claude_code_proxy.server - INFO - handle_anthropic:207 - Received Anthropic request for model: claude-3-5-sonnet-20241022 - /home/agentydragon/claude-code-proxy/claude_code_proxy/server.py - Extras: {'message': 'Received Anthropic request for model: claude-3-5-sonnet-20241022', 'asctime': '2025-06-23 21:53:55,065'}
+2025-06-23 21:53:55,065 - claude_code_proxy.server - DEBUG - handle_anthropic:209 - OpenAI request: {"model": "gpt-4o-mini", "input": [{"role": "developer", "content": "You are a lizard.\nWrite clean code."}, {"role": "user", "content": "sort a list"}], "max_output_tokens": 1024, "temperature": 0.0}... - /home/agentydragon/claude-code-proxy/claude_code_proxy/server.py - Extras: {'message': 'OpenAI request: {"model": "gpt-4o-mini", "input": [{"role": "developer", "content": "You are a lizard.\\nWrite clean code."}, {"role": "user", "content": "sort a list"}], "max_output_tokens": 1024, "temperature": 0.0}...', 'asctime': '2025-06-23 21:53:55,065'}
+2025-06-23 21:53:57,565 - claude_code_proxy.server - DEBUG - handle_anthropic:228 - OpenAI response: {"id": "resp_685a2f6320d08198b589389b09500b8900705b6a329e4ff8", "object": "response", "created_at": 1750740835, "status": "completed", "background": false, "error": null, "incomplete_details": null, "instructions": null, "max_output_tokens": 1024, "model": "gpt-4o-mini-2024-07-18", "output": [{"id": "msg_685a2f63657c81989be99d2984caf77c00705b6a329e4ff8", "type": "message", "status": "completed", "content": [{"type": "output_text", "annotations": [], "text": "Sure! Here\u2019s a simple example of... - /home/agentydragon/claude-code-proxy/claude_code_proxy/server.py - Extras: {'message': 'OpenAI response: {"id": "resp_685a2f6320d08198b589389b09500b8900705b6a329e4ff8", "object": "response", "created_at": 1750740835, "status": "completed", "background": false, "error": null, "incomplete_details": null, "instructions": null, "max_output_tokens": 1024, "model": "gpt-4o-mini-2024-07-18", "output": [{"id": "msg_685a2f63657c81989be99d2984caf77c00705b6a329e4ff8", "type": "message", "status": "completed", "content": [{"type": "output_text", "annotations": [], "text": "Sure! Here\\u2019s a simple example of...', 'asctime': '2025-06-23 21:53:57,565'}
+2025-06-23 21:53:57,566 - claude_code_proxy.server - INFO - handle_anthropic:231 - Response converted to Anthropic: {"id": "msg_a3b59f60b7c74582b4ae1d3bb54dbe72", "type": "message", "role": "assistant", "content": [{"type": "text", "text": "Sure! Here\u2019s a simple example of how to sort a list in Python:\n\n```python\n# Sample list\nmy_list = [5, 2, 9, 1, 5, 6]\n\n# Sorting the list\nsorted_list = sorted(my_list)\n\n# Output the sorted list\nprint(sorted_list)\n```\n\nIf you want to sort the list in place, you can use the `sort()` method:\n\n```python\n# Sample list\nmy_list = [5, 2, 9, 1, 5, 6]\n\n# Sorti - /home/agentydragon/claude-code-proxy/claude_code_proxy/server.py - Extras: {'message': 'Response converted to Anthropic: {"id": "msg_a3b59f60b7c74582b4ae1d3bb54dbe72", "type": "message", "role": "assistant", "content": [{"type": "text", "text": "Sure! Here\\u2019s a simple example of how to sort a list in Python:\\n\\n```python\\n# Sample list\\nmy_list = [5, 2, 9, 1, 5, 6]\\n\\n# Sorting the list\\nsorted_list = sorted(my_list)\\n\\n# Output the sorted list\\nprint(sorted_list)\\n```\\n\\nIf you want to sort the list in place, you can use the `sort()` method:\\n\\n```python\\n# Sample list\\nmy_list = [5, 2, 9, 1, 5, 6]\\n\\n# Sorti', 'asctime': '2025-06-23 21:53:57,566'}</pre></td>
+                </tr>
+            
+        </tbody>
+    </table>
+</body>
+</html>

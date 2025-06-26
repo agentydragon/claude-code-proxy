@@ -19,6 +19,61 @@ ANTHROPIC_TO_OPENAI_MODEL: dict[str, str] = CONFIG.anthropic_to_openai_model or 
     "claude-3-opus-20240229": "gpt-4o",
 }
 
+def _convert_tool_call_to_function_call(tc: Dict[str, Any]) -> Dict[str, Any]:
+    """Convert an Anthropic tool_use block to OpenAI function_call format."""
+    return {
+        "type": "function_call",
+        "name": tc["name"],
+        "arguments": json.dumps(tc["input"]),
+        "call_id": tc["id"]
+    }
+
+def _create_tool_use_block(id: str, name: str, input_data: Dict[str, Any]) -> Dict[str, Any]:
+    """Create an Anthropic tool_use content block."""
+    return {
+        "type": "tool_use",
+        "id": id,
+        "name": name,
+        "input": input_data
+    }
+
+def parse_json_arguments(arguments: Any, context_name: str, context_type: str = "tool") -> Dict[str, Any]:
+    """Parse JSON arguments with error handling and recovery.
+    
+    Args:
+        arguments: The arguments to parse (string or dict)
+        context_name: Name of the tool/function for error messages
+        context_type: Type of context ('tool' or 'function')
+        
+    Returns:
+        Parsed arguments dict, or error object if parsing fails
+    """
+    try:
+        if isinstance(arguments, str):
+            return json.loads(arguments) if arguments else {}
+        else:
+            return arguments if arguments else {}
+    except json.JSONDecodeError as e:
+        logger.warning(f"Failed to parse {context_type} arguments for '{context_name}': {e}")
+        logger.warning(f"Raw arguments: {arguments}")
+        
+        # Build detailed error position
+        error_pos = "unknown position"
+        if hasattr(e, 'lineno') and hasattr(e, 'colno'):
+            error_pos = f"line {e.lineno}, column {e.colno}"
+        elif hasattr(e, 'pos'):
+            error_pos = f"character {e.pos}"
+            
+        # Return structured error that helps the model retry
+        return {
+            "error": f"Failed to parse JSON arguments for {context_type}",
+            "raw_arguments": arguments,
+            "parse_error": str(e),
+            "error_position": error_pos,
+            f"{context_type}_name": context_name,
+            "instruction": f"The JSON arguments for {context_type} '{context_name}' are malformed at {str(e)}. Please retry with valid JSON. Common issues: unescaped quotes, missing commas, or incomplete brackets."
+        }
+
 def anthropic_to_openai_request(anthropic_req: Dict[str, Any]) -> Dict[str, Any]:
     """Convert Anthropic Messages API request to OpenAI Responses API format."""
     # Map model
@@ -110,20 +165,35 @@ def openai_to_anthropic_response(openai_resp: Dict[str, Any]) -> Dict[str, Any]:
                         "text": content_item["text"]
                     })
                 elif content_item.get("type") == "tool_call":
-                    anthropic_resp["content"].append({
-                        "type": "tool_use",
-                        "id": content_item["id"],
-                        "name": content_item["name"],
-                        "input": json.loads(content_item["arguments"]) if isinstance(content_item["arguments"], str) else content_item["arguments"]
-                    })
+                    # Parse arguments with error handling
+                    input_data = parse_json_arguments(
+                        content_item.get("arguments", "{}"),
+                        content_item.get("name", "unknown"),
+                        "tool"
+                    )
+                    
+                    anthropic_resp["content"].append(
+                        _create_tool_use_block(
+                            content_item["id"],
+                            content_item["name"],
+                            input_data
+                        )
+                    )
         elif item.get("type") == "function_call":
             # Handle function calls from OpenAI
-            anthropic_resp["content"].append({
-                "type": "tool_use",
-                "id": item.get("call_id", item.get("id", f"toolu_{uuid.uuid4().hex[:8]}")),
-                "name": item.get("name", ""),
-                "input": json.loads(item.get("arguments", "{}")) if isinstance(item.get("arguments", "{}"), str) else item.get("arguments", {})
-            })
+            input_data = parse_json_arguments(
+                item.get("arguments", "{}"),
+                item.get("name", "unknown"),
+                "function"
+            )
+            
+            anthropic_resp["content"].append(
+                _create_tool_use_block(
+                    item.get("call_id", item.get("id", f"toolu_{uuid.uuid4().hex[:8]}")),
+                    item.get("name", ""),
+                    input_data
+                )
+            )
         elif item.get("type") == "reasoning":
             # Map OpenAI reasoning to Anthropic thinking blocks
             anthropic_resp["content"].append({
@@ -188,12 +258,7 @@ def _split_tool_message( msg: Dict[str, Any]) -> List[Dict[str, Any]]:
 
                 # Add tool calls as separate function_call items
                 for tc in tool_calls:
-                    items.append({
-                        "type": "function_call",
-                        "name": tc["name"],
-                        "arguments": json.dumps(tc["input"]),
-                        "call_id": tc["id"]
-                    })
+                    items.append(_convert_tool_call_to_function_call(tc))
 
                 text_parts = []
                 tool_calls = []
@@ -215,12 +280,7 @@ def _split_tool_message( msg: Dict[str, Any]) -> List[Dict[str, Any]]:
         
         # Add remaining tool calls as separate function_call items
         for tc in tool_calls:
-            items.append({
-                "type": "function_call",
-                "name": tc["name"],
-                "arguments": json.dumps(tc["input"]),
-                "call_id": tc["id"]
-            })
+            items.append(_convert_tool_call_to_function_call(tc))
     
     return items
 
@@ -274,11 +334,9 @@ def _convert_message_to_input(msg: Dict[str, Any]) -> Optional[Dict[str, Any]]:
             continue
 
         elif block_type == "thinking":
-            # Map thinking blocks to OpenAI reasoning
-            output_content.append({
-                "type": "reasoning",
-                "content": block.get("text", "")
-            })
+            # Skip thinking blocks for now - OpenAI doesn't support reasoning in input
+            logger.debug("Skipping thinking block in input message")
+            continue
 
         else:
             logger.warning(f"Unknown content block type: {block_type}")
