@@ -40,3 +40,4 @@ ENV/
 # References
 references/*
 !references/fetch.sh
+!references/fetch_openai_docs.py
