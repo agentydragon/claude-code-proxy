@@ -99,6 +99,12 @@ def anthropic_to_openai_request(anthropic_req: Dict[str, Any]) -> Dict[str, Any]
             else:
                 logger.warning(f"Skipping unsupported message format: {msg}")
 
+    # OpenAI API requires at least one of: input, prompt, or previous_response_id
+    # If input is empty, we need to provide a minimal valid input
+    if not input_items:
+        logger.warning("No valid input items after conversion - adding minimal user prompt")
+        input_items = [{"role": "user", "content": ""}]
+    
     openai_req["input"] = input_items
     # 2025-06-23 22:01:25,358 - INFO - Received Anthropic request for model: claude-3-5-haiku-20241022
     # 2025-06-23 22:01:25,358 - DEBUG - OpenAI request: {"model": "gpt-4o-mini", "input": [{"role": "user", "content": "quota"}], "max_output_tokens": 1, "metadata": {}, "user": "f35dc80505901d7cc45bb33b9d66a2ca896e6cc173285c043c932be151f45d59"}...
