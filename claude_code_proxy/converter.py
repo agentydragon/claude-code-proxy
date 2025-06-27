@@ -76,11 +76,24 @@ def parse_json_arguments(arguments: Any, context_name: str, context_type: str = 
 
 def anthropic_to_openai_request(anthropic_req: Dict[str, Any]) -> Dict[str, Any]:
     """Convert Anthropic Messages API request to OpenAI Responses API format."""
-    # Map model
+    # Map Anthropic model name to OpenAI model, allowing a catch-all fallback ('*')
     anthropic_model = anthropic_req["model"]
-    openai_model = ANTHROPIC_TO_OPENAI_MODEL.get(anthropic_model)
-    if not openai_model:
-        raise ValueError(f"No mapping found for Anthropic model: {anthropic_model}")
+    openai_model: str | None = None
+    mappings = ANTHROPIC_TO_OPENAI_MODEL or {}
+    fallback = mappings.get("*")
+    for pattern, target in mappings.items():
+        if pattern != "*" and fnmatch.fnmatch(anthropic_model, pattern):
+            openai_model = target
+            break
+    if openai_model is None:
+        if fallback is not None:
+            openai_model = fallback
+            logger.warning(
+                f"No mapping for Anthropic model '{anthropic_model}', using fallback '{fallback}'"
+            )
+        else:
+            # No custom mapping -> default to original Anthropic model name
+            openai_model = anthropic_model
     openai_req = {"model": openai_model}
 
     # Map system instructions if present (Anthropic 'system' → OpenAI 'instructions')

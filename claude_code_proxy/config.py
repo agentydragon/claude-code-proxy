@@ -1,4 +1,5 @@
 """Configuration management for claude-code-proxy using Pydantic and XDG."""
+
 import os
 import sys
 from pathlib import Path
@@ -28,13 +29,15 @@ class ReasoningSummary(str, Enum):
 
 class ModelMapping(BaseModel):
     """Custom model mapping rule."""
+
     source_anthropic_model: str
     target_openai_model: str
 
 
 class ProxyConfig(BaseModel):
     """Main configuration for claude-code-proxy."""
-    openai_api_key: str | None
+
+    openai_api_key: str | None = None
 
     # Custom mappings
     anthropic_to_openai_model: dict[str, str] = Field(default_factory=dict)
@@ -43,14 +46,14 @@ class ProxyConfig(BaseModel):
     host: str = Field("0.0.0.0", description="Host to bind to")
     port: int = Field(8082, description="Port to listen on")
     log_level: str = Field("WARNING", description="Logging level: DEBUG, INFO, WARNING, ERROR")
-    
+
     # Reasoning model settings
     reasoning_effort: ReasoningEffort = Field(ReasoningEffort.MEDIUM, description="Reasoning effort for o1/o3 models")
     reasoning_summary: ReasoningSummary = Field(ReasoningSummary.AUTO, description="Reasoning summary type")
 
-    @validator('log_level')
+    @validator("log_level")
     def validate_log_level(cls, v):
-        valid_levels = ['DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL']
+        valid_levels = ["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"]
         if v.upper() not in valid_levels:
             raise ValueError(f"log_level must be one of {valid_levels}")
         return v.upper()
@@ -67,24 +70,26 @@ def load_config(config_file: str | None = None) -> ProxyConfig:
     config_data = {}
 
     # Load from config file if it exists
-    config_path = Path(config_file) if config_file else Path(platformdirs.user_config_dir("claude-code-proxy")) / "config.toml"
+    config_path = (
+        Path(config_file) if config_file else Path(platformdirs.user_config_dir("claude-code-proxy")) / "config.toml"
+    )
     if config_path.exists():
-        with open(config_path, 'rb') as f:
+        with open(config_path, "rb") as f:
             config_data = tomllib.load(f)
 
     # Override with environment variables (only if not set in config file)
     env_mapping = {
-        'OPENAI_API_KEY': 'openai_api_key',
-        'PROXY_HOST': 'host',
-        'PROXY_PORT': 'port',
-        'LOG_LEVEL': 'log_level',
+        "OPENAI_API_KEY": "openai_api_key",
+        "PROXY_HOST": "host",
+        "PROXY_PORT": "port",
+        "LOG_LEVEL": "log_level",
     }
 
     for env_var, config_key in env_mapping.items():
         if env_var in os.environ and config_key not in config_data:
             value = os.environ[env_var]
             # Convert port to int
-            if config_key == 'port':
+            if config_key == "port":
                 try:
                     value = int(value)
                 except ValueError:

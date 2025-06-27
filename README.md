@@ -1,210 +1,113 @@
-# Anthropic API Proxy for Gemini & OpenAI Models 🔄
+# Claude Code Proxy
 
-**Use Anthropic clients (like Claude Code) with Gemini or OpenAI backends.** 🤝
+Proxy server to use Anthropic clients (e.g., Claude Code) with OpenAI models by translating Anthropic Messages API requests to OpenAI Chat Completion API format.
 
-A proxy server that lets you use Anthropic clients with Gemini or OpenAI models via LiteLLM. 🌉
+![Claude Code Proxy Architecture Screenshot](screenshot.png)
 
+## Features
 
-![Anthropic API Proxy](pic.png)
+- Receives Anthropic API requests and converts them to OpenAI Chat API format
+- Supports both streaming and non-streaming responses
+- Configurable mapping between Anthropic model names and OpenAI models
+- Health check endpoint for monitoring
+- Detailed request/response logging for debugging
 
-## Quick Start ⚡
+## Requirements
 
-### Prerequisites
+- Python 3.10 or higher
+- OpenAI API key
 
-- OpenAI API key 🔑
-- Google AI Studio (Gemini) API key (if using Google provider) 🔑
-- [uv](https://github.com/astral-sh/uv) installed.
+## Installation
 
-### Setup 🛠️
-
-1. **Clone this repository**:
-   ```bash
-   git clone https://github.com/1rgs/claude-code-openai.git
-   cd claude-code-openai
-   ```
-
-2. **Install uv** (if you haven't already):
-   ```bash
-   curl -LsSf https://astral.sh/uv/install.sh | sh
-   ```
-   *(`uv` will handle dependencies based on `pyproject.toml` when you run the server)*
-
-3. **Configure your proxy**: 
-   Set up your configuration file following the Configuration section below. You can use either:
-   - A `config.toml` file (recommended) - see the Configuration section
-   - Environment variables as fallback
-
-4. **Run the server**:
-   ```bash
-   uv run uvicorn server:app --host 0.0.0.0 --port 8082 --reload
-   ```
-   *(`--reload` is optional, for development)*
-
-### Using with Claude Code 🎮
-
-1. **Install Claude Code** (if you haven't already):
-   ```bash
-   npm install -g @anthropic-ai/claude-code
-   ```
-
-2. **Connect to your proxy**:
-   ```bash
-   ANTHROPIC_BASE_URL=http://localhost:8082 claude
-   ```
-
-3. **That's it!** Your Claude Code client will now use the configured backend models (defaulting to Gemini) through the proxy. 🎯
-
-## Configuration 🔧
-
-### Configuration File Location
-
-The proxy looks for `config.toml` in the following locations (in order):
-
-1. **XDG Config Directory** (recommended):
-   - Linux: `~/.config/claude-code-proxy/config.toml`
-   - macOS: `~/Library/Application Support/claude-code-proxy/config.toml`
-   - Windows: `%APPDATA%\claude-code-proxy\config.toml`
-
-2. **Legacy Location**: `~/.config/claude-code-proxy/config.toml`
-
-### Configuration Setup
-
-1. Copy the example configuration:
-   ```bash
-   mkdir -p ~/.config/claude-code-proxy
-   cp config.example.toml ~/.config/claude-code-proxy/config.toml
-   ```
-
-2. Edit the configuration with your API keys:
-   ```bash
-   $EDITOR ~/.config/claude-code-proxy/config.toml
-   ```
-
-### Configuration Options
-
-#### API Keys
-```toml
-anthropic_api_key = "sk-ant-..."  # Optional if not using Anthropic fallback
-openai_api_key = "sk-proj-..."    # Required for OpenAI models
-gemini_api_key = "AI..."          # Required for Gemini models
+```bash
+git clone https://github.com/1rgs/claude-code-openai.git
+cd claude-code-openai
+pip install .
 ```
 
-#### Model Mapping
-```toml
-preferred_provider = "openai"   # Default provider: "openai" or "google"
-```
+## Configuration
 
-#### Server Settings
-```toml
-host = "0.0.0.0"    # Listen address
-port = 8082         # Listen port
-log_level = "INFO"  # Logging level: DEBUG, INFO, WARNING, ERROR
-```
+Configuration is loaded from the XDG configuration directory by default:
 
-#### Custom Model Mappings
+- **Linux**: `~/.config/claude-code-proxy/config.toml`
+- **macOS**: `~/Library/Application Support/claude-code-proxy/config.toml`
+- **Windows**: `%APPDATA%\claude-code-proxy\config.toml`
 
-Map specific model patterns to different models:
+If the configuration file is not present, you can use environment variables instead.
+
+### Example `config.toml`
 
 ```toml
-[[custom_mappings]]
-pattern = "opus"              # Match "opus" in model name
-target_model = "gpt-4o"       # Map to this model
-target_provider = "openai"    # Use this provider
+# OpenAI API key (required)
+openai_api_key = "sk-...your-openai-key..."
 
-[[custom_mappings]]
-pattern = "claude-3.5-sonnet"
-target_model = "gpt-4o"
-target_provider = "openai"
+# Mapping from Anthropic model names (glob patterns) to OpenAI model IDs
+anthropic_to_openai_model = {
+  "claude-opus-4-*" = "gpt-4",
+  "claude-3-5-*"   = "gpt-3.5-turbo"
+}
+
+# Server settings (optional)
+host = "0.0.0.0"
+port = 8082
+log_level = "INFO"         # one of: DEBUG, INFO, WARNING, ERROR
+
+# Reasoning model parameters (optional)
+# reasoning_effort = "medium"   # Options: low, medium, high
+# reasoning_summary = "auto"    # Options: none, concise, detailed, auto
 ```
 
 ### Environment Variables
 
-Environment variables can be used as fallback when not set in config:
+- `OPENAI_API_KEY` (required if not set in config)
+- `PROXY_HOST`      (overrides `host`)
+- `PROXY_PORT`      (overrides `port`)
+- `LOG_LEVEL`       (overrides `log_level`)
 
-- `ANTHROPIC_API_KEY`
-- `OPENAI_API_KEY`
-- `GEMINI_API_KEY`
-- `PREFERRED_PROVIDER`
-- `PROXY_HOST`
-- `PROXY_PORT`
-- `LOG_LEVEL`
+## Usage
 
-### Example Configurations
-
-#### Using OpenAI for everything:
-```toml
-openai_api_key = "sk-proj-..."
-preferred_provider = "openai"
-```
-
-#### Using Gemini for everything:
-```toml
-gemini_api_key = "AI..."
-preferred_provider = "google"
-```
-
-#### Mixed providers with custom mappings:
-```toml
-openai_api_key = "sk-proj-..."
-gemini_api_key = "AI..."
-preferred_provider = "openai"
-
-[[custom_mappings]]
-pattern = "claude-3-opus"
-target_model = "gemini-1.5-pro"
-target_provider = "google"
-```
-
-### Troubleshooting
-
-#### Config File Errors
-
-If your config file has syntax errors, the proxy will refuse to start with a clear error message. Common issues:
-
-- Missing quotes around strings
-- Invalid TOML syntax
-- Missing required fields
-
-#### Testing Your Config
-
-Run the proxy with debug logging to see model mappings:
+Start the proxy using the console script (default localhost binding):
 
 ```bash
-LOG_LEVEL=DEBUG python server.py
+claude-code-proxy --host 127.0.0.1
 ```
 
-#### Validating TOML Syntax
-
-You can validate your TOML file online at https://www.toml-lint.com/ or use:
+You can override the host, port, or log level on the command line:
 
 ```bash
-python -c "import tomli; tomli.load(open('config.toml', 'rb'))"
+claude-code-proxy --host 127.0.0.1 --port 8082 --log-level debug
 ```
 
-## Model Mapping 🗺️
+## Health Check
 
-The proxy automatically maps Anthropic model names to your configured providers:
+Verify that the proxy is running:
 
-**Custom mappings** take precedence over default rules
+```bash
+curl http://localhost:8082/health
+```
 
-### Customizing Model Mapping
+## Integration with Claude Clients
 
-See the Configuration section above for detailed instructions on customizing model mappings using either:
-- The `config.toml` file (recommended)
-- Environment variables as fallback
+Point your Anthropic client (e.g., Claude Code) to the proxy:
 
-## How It Works 🧩
+```bash
+ANTHROPIC_BASE_URL=http://localhost:8082 claude
+```
 
-This proxy works by:
+## Logging
 
-1. **Receiving requests** in Anthropic's API format 📥
-2. **Translating** the requests to OpenAI format via LiteLLM 🔄
-3. **Sending** the translated request to OpenAI 📤
-4. **Converting** the response back to Anthropic format 🔄
-5. **Returning** the formatted response to the client ✅
+All Anthropic and OpenAI requests/responses are logged (in JSONL) under the application state directory:
 
-The proxy handles both streaming and non-streaming responses, maintaining compatibility with all Claude clients. 🌊
+- **Linux**: `~/.local/state/claude-code-proxy/logs/<timestamp>/` or `$XDG_STATE_HOME/claude-code-proxy/logs/<timestamp>/`
+- **macOS**: `~/Library/Application Support/claude-code-proxy/logs/<timestamp>/`
+- **Windows**: `%LOCALAPPDATA%\claude-code-proxy\logs\<timestamp>\`
 
-## Contributing 🤝
+You can override the base state directory on Linux by setting the `XDG_STATE_HOME` environment variable.
 
-Contributions are welcome! Please feel free to submit a Pull Request. 🎁
+## Contributing
+
+Contributions are welcome! Please open an issue or submit a pull request.
+
+---
+
+*This project is licensed under the MIT License.*

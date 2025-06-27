@@ -15,8 +15,7 @@ from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse, StreamingResponse
 
 from .config import load_config
-from .converter import (anthropic_to_openai_request,
-                        openai_to_anthropic_response)
+from .converter import anthropic_to_openai_request, openai_to_anthropic_response
 
 # Load configuration
 config = load_config()
@@ -24,13 +23,14 @@ config = load_config()
 # Configure logging
 log_level = logging._nameToLevel[config.log_level.upper()]
 logging.basicConfig(
-  level=log_level,
-  format='%(asctime)s - %(levelname)s - %(message)s',
+    level=log_level,
+    format="%(asctime)s - %(levelname)s - %(message)s",
 )
 logger = logging.getLogger(__name__)
 
+
 # Setup XDG-compliant logging directory with session subdirectory
-session_id = datetime.now().strftime('%Y%m%d_%H%M%S')
+session_id = datetime.now().strftime("%Y%m%d_%H%M%S")
 log_dir = Path(platformdirs.user_state_dir("claude-code-proxy")) / "logs" / session_id
 log_dir.mkdir(parents=True, exist_ok=True)
 
@@ -45,17 +45,22 @@ conversation_tracking_log = log_dir / "conversation_tracking.jsonl"
 # Store: conversation_id -> {"messages": list, "last_response": dict, "message_count": int}
 conversation_cache = {}
 
+
 def _count_thinking_blocks(messages: list) -> int:
     """Count thinking blocks in a list of messages."""
-    return sum(1 for msg in messages 
-               for block in (msg.get("content", []) if isinstance(msg.get("content"), list) else []) 
-               if isinstance(block, dict) and block.get("type") == "thinking")
+    return sum(
+        1
+        for msg in messages
+        for block in (msg.get("content", []) if isinstance(msg.get("content"), list) else [])
+        if isinstance(block, dict) and block.get("type") == "thinking"
+    )
+
 
 def _messages_equal_ignoring_thinking(msg1: dict, msg2: dict) -> bool:
     """Compare two messages, ignoring thinking blocks."""
     if msg1.get("role") != msg2.get("role"):
         return False
-    
+
     # Extract non-thinking content
     def get_non_thinking_content(msg):
         content = msg.get("content", [])
@@ -68,12 +73,13 @@ def _messages_equal_ignoring_thinking(msg1: dict, msg2: dict) -> bool:
                     filtered.append(block)
             return filtered
         return content
-    
+
     content1 = get_non_thinking_content(msg1)
     content2 = get_non_thinking_content(msg2)
-    
+
     # Compare content
     return json.dumps(content1, sort_keys=True) == json.dumps(content2, sort_keys=True)
+
 
 def log_jsonl(filepath: Path, data: dict):
     """Write a JSON line to a file."""
@@ -83,19 +89,18 @@ def log_jsonl(filepath: Path, data: dict):
             data["timestamp"] = time.time()
         if "datetime" not in data:
             data["datetime"] = datetime.now().isoformat()
-            
-        with filepath.open('a', encoding='utf-8') as f:
+
+        with filepath.open("a", encoding="utf-8") as f:
             json.dump(data, f, ensure_ascii=False)
-            f.write('\n')
+            f.write("\n")
     except Exception as e:
         logger.error(f"Failed to write to {filepath}: {e}")
 
 
 app = FastAPI()
 
-OPENAI_CLIENT= httpx.AsyncClient(
-    headers={"Authorization": f"Bearer {config.openai_api_key}"}
-)
+OPENAI_CLIENT = httpx.AsyncClient(headers={"Authorization": f"Bearer {config.openai_api_key}"})
+
 
 def _trunc(x):
     T = 10000
@@ -112,6 +117,7 @@ def _trunc(x):
                     for item in v:
                         if isinstance(item, dict):
                             truncate_dict(item)
+
         truncate_dict(x)
 
         x = json.dumps(x)
@@ -119,40 +125,39 @@ def _trunc(x):
         return x[:T] + "..."
     return x
 
+
 async def stream_handler(openai_request, request_id):
     logger.debug(f"Starting stream handler for request {request_id}")
-    
+
     max_retries = 3
     retry_delay = 1.0
-    
+
     for attempt in range(max_retries):
         try:
             async with OPENAI_CLIENT.stream(
-                "POST",
-                "https://api.openai.com/v1/responses",
-                json=openai_request,
-                timeout=300.0
+                "POST", "https://api.openai.com/v1/responses", json=openai_request, timeout=300.0
             ) as response:
                 if response.status_code != 200:
                     error_text = await response.aread()
-                    
+
                     # Retry on 5xx errors
                     if response.status_code >= 500 and attempt < max_retries - 1:
-                        logger.warning(f"Streaming server error {response.status_code} (attempt {attempt + 1}/{max_retries})")
+                        logger.warning(
+                            f"Streaming server error {response.status_code} (attempt {attempt + 1}/{max_retries})"
+                        )
                         await asyncio.sleep(retry_delay)
                         retry_delay *= 2
                         continue
-                    
+
                     logger.error(f"OpenAI streaming error: {error_text}")
                     raise HTTPException(status_code=response.status_code, detail=error_text.decode())
-                
+
                 logger.debug(f"Streaming response status: {response.status_code}")
-                
+
                 # Track if we've started the content block
                 content_block_started = False
                 message_started = False
                 current_event = None
-
 
                 def _data(type, **kwargs):
                     """Helper function to format data for streaming."""
@@ -179,18 +184,14 @@ async def stream_handler(openai_request, request_id):
                                 _data(type="content_block_stop", index=0)
                             _data(
                                 type="message_delta",
-                                delta={
-                                    "stop_reason": "end_turn",
-                                    "stop_sequence": None
-                                },
+                                delta={"stop_reason": "end_turn", "stop_sequence": None},
                                 # Would need to track this
-                                usage={"output_tokens": 0}
+                                usage={"output_tokens": 0},
                             )
                             _data(type="message_stop")
                             break
                         # Skip other events for now
                         continue
-
 
                     DATA_PREFIX = "data: "
                     if not line.startswith(DATA_PREFIX):
@@ -202,9 +203,7 @@ async def stream_handler(openai_request, request_id):
                     if data == "[DONE]":
                         # Convert to Anthropic's completion event
                         yield "event: message_stop\n"
-                        yield _data({
-                            "type": "message_stop"
-                        })
+                        yield _data({"type": "message_stop"})
                         break
 
                     chunk = json.loads(data)
@@ -212,11 +211,11 @@ async def stream_handler(openai_request, request_id):
 
                     # Convert OpenAI Responses API chunk to Anthropic format
                     chunk_type = chunk.get("type")
-            
+
             # Handle different streaming event types
             if chunk_type == "response.output_text.delta":
                 # Text delta event from newer API format
-                if (text := chunk.get("delta", "")):
+                if text := chunk.get("delta", ""):
                     # Start message if not started
                     if not message_started:
                         _data(
@@ -229,37 +228,22 @@ async def stream_handler(openai_request, request_id):
                                 "model": openai_request.get("model", "unknown"),
                                 "stop_reason": None,
                                 "stop_sequence": None,
-                                "usage": {"input_tokens": 0, "output_tokens": 0}
-                            }
+                                "usage": {"input_tokens": 0, "output_tokens": 0},
+                            },
                         )
                         message_started = True
 
                     # Start content block if not started
                     if not content_block_started:
-                        _data(
-                            type="content_block_start",
-                            index=0,
-                            content_block={
-                                "type": "text",
-                                "text": ""
-                            }
-                        )
+                        _data(type="content_block_start", index=0, content_block={"type": "text", "text": ""})
                         content_block_started = True
 
-                    _data(
-                        type="content_block_delta",
-                        index=0,
-                        delta={"type": "text_delta", "text": text}
-                    )
+                    _data(type="content_block_delta", index=0, delta={"type": "text_delta", "text": text})
             elif chunk_type == "response.output.delta":
                 # Legacy format
                 delta = chunk.get("delta", {})
                 if delta.get("type") == "output_text" and "text" in delta:
-                    _data(
-                        type="content_block_delta",
-                        index=0,
-                        delta={"type": "text_delta", "text": delta["text"]}
-                    )
+                    _data(type="content_block_delta", index=0, delta={"type": "text_delta", "text": delta["text"]})
 
                 # Handle tool calls for legacy format
                 for i, tool_call in enumerate(delta.get("tool_calls", [])):
@@ -276,21 +260,21 @@ async def stream_handler(openai_request, request_id):
                                 "type": "tool_use",
                                 "id": tool_call.get("id", f"tool_{i}"),
                                 "name": fn["name"],
-                                "input": {}
-                            }
+                                "input": {},
+                            },
                         )
 
                     # Tool call arguments delta
-                    if (args := fn.get("arguments")):
+                    if args := fn.get("arguments"):
                         _data(
                             type="content_block_delta",
                             index=i + 1,
-                            delta={"type": "input_json_delta", "partial_json": args}
+                            delta={"type": "input_json_delta", "partial_json": args},
                         )
-                
+
                 # Successful streaming, exit retry loop
                 return
-                
+
         except Exception as e:
             if attempt < max_retries - 1:
                 logger.warning(f"Streaming failed (attempt {attempt + 1}/{max_retries}): {str(e)}")
@@ -300,30 +284,30 @@ async def stream_handler(openai_request, request_id):
                 logger.error(f"Streaming failed after {max_retries} attempts: {str(e)}")
                 raise
 
+
 async def handle_anthropic(anthropic_req, request_headers=None):
     request_id = str(uuid.uuid4())
     logger.info(f"Received Anthropic request {request_id}: {_trunc(anthropic_req)}")
-    
+
     # Log full Anthropic request
-    log_jsonl(anthropic_requests_log, {
-        "request_id": request_id,
-        "headers": dict(request_headers) if request_headers else {},
-        "body": anthropic_req
-    })
-    
+    log_jsonl(
+        anthropic_requests_log,
+        {"request_id": request_id, "headers": dict(request_headers) if request_headers else {}, "body": anthropic_req},
+    )
+
     # Check if this is an append scenario
     messages = anthropic_req.get("messages", [])
     conversation_id = None
     is_append = False
     has_reasoning = False
     append_from_index = -1
-    
+
     # Extract conversation ID from headers or generate one
     if request_headers:
         conversation_id = dict(request_headers).get("x-conversation-id", str(uuid.uuid4()))
     else:
         conversation_id = str(uuid.uuid4())
-    
+
     # Check if messages contain reasoning/thinking blocks
     for msg in messages:
         content = msg.get("content", [])
@@ -332,14 +316,14 @@ async def handle_anthropic(anthropic_req, request_headers=None):
                 if isinstance(block, dict) and block.get("type") == "thinking":
                     has_reasoning = True
                     break
-    
+
     # Detect if this could be an append by checking message content across all conversations
     if len(messages) > 1:  # Only check for appends if we have multiple messages
         # First try the same conversation ID for efficiency
         if conversation_id in conversation_cache:
             cached_data = conversation_cache[conversation_id]
             cached_messages = cached_data.get("messages", [])
-            
+
             if len(messages) >= len(cached_messages) and len(cached_messages) > 0:
                 # Compare message content (excluding thinking blocks for comparison)
                 is_append = True
@@ -347,15 +331,15 @@ async def handle_anthropic(anthropic_req, request_headers=None):
                     if not _messages_equal_ignoring_thinking(messages[i], cached_msg):
                         is_append = False
                         break
-                
+
                 if is_append:
                     append_from_index = len(cached_messages)
-        
+
         # If not found with same ID, check all cached conversations for matching content
         if not is_append:
             for cached_conv_id, cached_data in conversation_cache.items():
                 cached_messages = cached_data.get("messages", [])
-                
+
                 if len(messages) >= len(cached_messages) and len(cached_messages) > 0:
                     # Check if messages match
                     matches = True
@@ -363,20 +347,22 @@ async def handle_anthropic(anthropic_req, request_headers=None):
                         if not _messages_equal_ignoring_thinking(messages[i], cached_msg):
                             matches = False
                             break
-                    
+
                     if matches:
                         is_append = True
                         append_from_index = len(cached_messages)
                         # Update conversation_id to the matched one for consistency
-                        logger.info(f"Detected append by content match: new ID {conversation_id} matches cached {cached_conv_id}")
+                        logger.info(
+                            f"Detected append by content match: new ID {conversation_id} matches cached {cached_conv_id}"
+                        )
                         conversation_id = cached_conv_id
                         break
-    
+
     # Check if previous conversation had reasoning filtered
     previous_had_reasoning_filtered = False
     if is_append and conversation_id in conversation_cache:
         previous_had_reasoning_filtered = conversation_cache[conversation_id].get("had_reasoning_filtered", False)
-    
+
     # Log conversation tracking info
     action = "passthrough"
     if has_reasoning:
@@ -384,24 +370,31 @@ async def handle_anthropic(anthropic_req, request_headers=None):
             action = "append_api_with_reasoning"
         else:
             action = "filtering_reasoning_new_conversation"
-    
-    log_jsonl(conversation_tracking_log, {
-        "request_id": request_id,
-        "conversation_id": conversation_id,
-        "is_append_candidate": is_append,
-        "has_reasoning": has_reasoning,
-        "previous_had_reasoning_filtered": previous_had_reasoning_filtered,
-        "message_count": len(messages),
-        "append_from_index": append_from_index if is_append else -1,
-        "action": action
-    })
-    
+
+    log_jsonl(
+        conversation_tracking_log,
+        {
+            "request_id": request_id,
+            "conversation_id": conversation_id,
+            "is_append_candidate": is_append,
+            "has_reasoning": has_reasoning,
+            "previous_had_reasoning_filtered": previous_had_reasoning_filtered,
+            "message_count": len(messages),
+            "append_from_index": append_from_index if is_append else -1,
+            "action": action,
+        },
+    )
+
     if has_reasoning and is_append:
         reasoning_count = _count_thinking_blocks(messages)
         if previous_had_reasoning_filtered:
-            logger.info(f"[REASONING PRESERVED] Request {request_id} appending to filtered conversation - preserving {reasoning_count} reasoning blocks in new messages")
+            logger.info(
+                f"[REASONING PRESERVED] Request {request_id} appending to filtered conversation - preserving {reasoning_count} reasoning blocks in new messages"
+            )
         else:
-            logger.info(f"[REASONING PRESERVED] Request {request_id} has reasoning and can use append API - preserving {reasoning_count} reasoning blocks")
+            logger.info(
+                f"[REASONING PRESERVED] Request {request_id} has reasoning and can use append API - preserving {reasoning_count} reasoning blocks"
+            )
         # For append scenario, we can keep the reasoning blocks
         # Example flow:
         # Original: u[r] a u[r] a u[r] a -> Filtered: u a u a u a
@@ -413,14 +406,16 @@ async def handle_anthropic(anthropic_req, request_headers=None):
         # Note: We're sending only new messages but OpenAI doesn't have explicit append API
     elif has_reasoning:
         reasoning_count = _count_thinking_blocks(messages)
-        logger.warning(f"[REASONING FILTERED] Request {request_id} has {reasoning_count} reasoning blocks that will be filtered out (new conversation)")
+        logger.warning(
+            f"[REASONING FILTERED] Request {request_id} has {reasoning_count} reasoning blocks that will be filtered out (new conversation)"
+        )
         # Need to filter out reasoning blocks since this is a new conversation
         openai_request = anthropic_to_openai_request(anthropic_req)
     else:
         # No reasoning blocks, convert normally
         openai_request = anthropic_to_openai_request(anthropic_req)
     logger.debug(f"Converted to OpenAI request for {request_id}")
-    
+
     # Update conversation cache with full message history
     if messages:
         # Store messages without thinking blocks for future comparison
@@ -431,27 +426,32 @@ async def handle_anthropic(anthropic_req, request_headers=None):
             if isinstance(content, str):
                 cleaned_msg["content"] = content
             elif isinstance(content, list):
-                cleaned_content = [block for block in content if not (isinstance(block, dict) and block.get("type") == "thinking")]
+                cleaned_content = [
+                    block for block in content if not (isinstance(block, dict) and block.get("type") == "thinking")
+                ]
                 cleaned_msg["content"] = cleaned_content
             else:
                 cleaned_msg["content"] = content
             messages_without_thinking.append(cleaned_msg)
-        
+
         conversation_cache[conversation_id] = {
             "messages": messages_without_thinking,
             "message_count": len(messages),
             "last_update": time.time(),
             "had_reasoning_filtered": has_reasoning and not is_append,
-            "original_had_reasoning": has_reasoning
+            "original_had_reasoning": has_reasoning,
         }
-    
+
     # Log OpenAI request
-    log_jsonl(openai_requests_log, {
-        "request_id": request_id,
-        "url": "https://api.openai.com/v1/responses",
-        "headers": dict(OPENAI_CLIENT.headers),
-        "body": openai_request
-    })
+    log_jsonl(
+        openai_requests_log,
+        {
+            "request_id": request_id,
+            "url": "https://api.openai.com/v1/responses",
+            "headers": dict(OPENAI_CLIENT.headers),
+            "body": openai_request,
+        },
+    )
 
     if anthropic_req.get("stream"):
         try:
@@ -464,24 +464,22 @@ async def handle_anthropic(anthropic_req, request_headers=None):
     max_retries = 3
     retry_delay = 1.0
     response = None
-    
+
     for attempt in range(max_retries):
         try:
             response = await OPENAI_CLIENT.post(
-                "https://api.openai.com/v1/responses",
-                json=openai_request,
-                timeout=300.0
+                "https://api.openai.com/v1/responses", json=openai_request, timeout=300.0
             )
-            
+
             # Check if it's a retryable error (5xx)
             if response.status_code >= 500 and attempt < max_retries - 1:
                 logger.warning(f"Server error {response.status_code} (attempt {attempt + 1}/{max_retries})")
                 await asyncio.sleep(retry_delay)
                 retry_delay *= 2  # Exponential backoff
                 continue
-            
+
             break  # Success or non-retryable error, exit loop
-            
+
         except Exception as e:
             if attempt < max_retries - 1:
                 logger.warning(f"Request failed (attempt {attempt + 1}/{max_retries}): {str(e)}")
@@ -490,15 +488,18 @@ async def handle_anthropic(anthropic_req, request_headers=None):
             else:
                 logger.error(f"Request failed after {max_retries} attempts: {str(e)}")
                 raise
-    
+
     # Log OpenAI response
-    log_jsonl(openai_responses_log, {
-        "request_id": request_id,
-        "status_code": response.status_code,
-        "headers": dict(response.headers),
-        "body": response.text if response.status_code != 200 else response.json()
-    })
-    
+    log_jsonl(
+        openai_responses_log,
+        {
+            "request_id": request_id,
+            "status_code": response.status_code,
+            "headers": dict(response.headers),
+            "body": response.text if response.status_code != 200 else response.json(),
+        },
+    )
+
     if response.status_code != 200:
         logger.error(f"OpenAI error: {response.text}")
         raise HTTPException(status_code=response.status_code, detail=response.text)
@@ -507,15 +508,18 @@ async def handle_anthropic(anthropic_req, request_headers=None):
 
     anthropic_response = openai_to_anthropic_response(openai_response)
     logger.info(f"Response converted to Anthropic: {_trunc(anthropic_response)}")
-    
+
     # Log Anthropic response
-    log_jsonl(anthropic_responses_log, {
-        "request_id": request_id,
-        "status_code": 200,
-        "headers": {},  # FastAPI will add its own headers
-        "body": anthropic_response
-    })
-    
+    log_jsonl(
+        anthropic_responses_log,
+        {
+            "request_id": request_id,
+            "status_code": 200,
+            "headers": {},  # FastAPI will add its own headers
+            "body": anthropic_response,
+        },
+    )
+
     return JSONResponse(content=anthropic_response)
 
 
@@ -545,7 +549,7 @@ async def health():
 
 @app.on_event("startup")
 async def startup_event():
-    """Log startup information."""
+    """Log startup information and validate configuration."""
     logger.info(f"Starting Claude Code Proxy - Session ID: {session_id}")
     logger.info(f"Logs directory: {log_dir}")
     logger.info(f"Log files:")
@@ -555,7 +559,19 @@ async def startup_event():
     logger.info(f"  - OpenAI responses: {openai_responses_log}")
     logger.info(f"  - Conversation tracking: {conversation_tracking_log}")
 
+    # Fail fast if no model mappings are configured
+    if not config.anthropic_to_openai_model:
+        logger.error("Configuration error: 'anthropic_to_openai_model' must include at least one mapping")
+        raise RuntimeError(
+            "Configuration error: 'anthropic_to_openai_model' must include at least one mapping"
+        )
+    # Fail fast if no OpenAI API key is provided
+    if not config.openai_api_key:
+        logger.error("Configuration error: OPENAI_API_KEY must be set via config or environment variables")
+        raise RuntimeError("Configuration error: OPENAI_API_KEY is required")
+
 
 if __name__ == "__main__":
     import uvicorn
+
     uvicorn.run(app, host="0.0.0.0", port=8001)
