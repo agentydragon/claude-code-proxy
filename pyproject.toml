@@ -12,6 +12,7 @@ dependencies = [
     "fastapi[standard]>=0.115.11",
     "uvicorn>=0.34.0",
     "httpx>=0.25.0",
+    "tenacity>=8.0.0",
     "pydantic>=2.0.0",
     "litellm>=1.40.14",
     "python-dotenv>=1.0.0",
@@ -73,10 +74,16 @@ module = "fastapi.*"
 ignore_missing_imports = true
 
 [[tool.mypy.overrides]]
+module = "tenacity.*"
+ignore_missing_imports = true
 
 [[tool.mypy.overrides]]
 module = "uvicorn.*"
 ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = "references.*"
+ignore_errors = true
 
 
 [tool.ruff]

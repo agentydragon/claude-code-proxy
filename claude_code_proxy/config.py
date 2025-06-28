@@ -1,5 +1,6 @@
 """Configuration management for claude-code-proxy using Pydantic and XDG."""
 
+import logging
 import os
 from enum import Enum
 from pathlib import Path
@@ -8,6 +9,8 @@ from typing import Any
 import platformdirs
 import tomli as tomllib
 from pydantic import BaseModel, Field, validator
+
+logger = logging.getLogger(__name__)
 
 
 class ReasoningEffort(str, Enum):
@@ -23,14 +26,14 @@ class ReasoningSummary(str, Enum):
     NONE = "none"
 
 
-class ModelMapping(BaseModel):
+class ModelMapping(BaseModel):  # type: ignore
     """Custom model mapping rule."""
 
     source_anthropic_model: str
     target_openai_model: str
 
 
-class ProxyConfig(BaseModel):
+class ProxyConfig(BaseModel):  # type: ignore
     """Main configuration for claude-code-proxy."""
 
     openai_api_key: str | None = None
@@ -63,7 +66,10 @@ def find_config_path(config_file: str | None = None) -> Path:
     txt = cwd / "config.toml"
     tst = cwd / "config.test.toml"
     xdg = Path(platformdirs.user_config_dir("claude-code-proxy")) / "config.toml"
-    return txt if txt.exists() else tst if tst.exists() else xdg
+    chosen = txt if txt.exists() else tst if tst.exists() else xdg
+
+    logger.info(f"Candidate config paths: cwd config: {txt}, test config: {tst}, xdg config: {xdg}. Using: {chosen}")
+    return chosen
 
 
 def load_config(config_file: str | None = None) -> ProxyConfig:
@@ -77,6 +83,7 @@ def load_config(config_file: str | None = None) -> ProxyConfig:
     config_data: dict[str, Any] = {}
     # Determine config file path and load if exists
     config_path = find_config_path(config_file)
+    logger.info(f"Loading config from: {config_path}")
     if config_path.exists():
         with open(config_path, "rb") as f:
             config_data = tomllib.load(f)
@@ -90,7 +97,7 @@ def load_config(config_file: str | None = None) -> ProxyConfig:
     }
     for env_var, config_key in env_mapping.items():
         if env_var in os.environ and config_key not in config_data:
-            value = os.environ[env_var]
+            value: str | int = os.environ[env_var]
             if config_key == "port":
                 try:
                     value = int(value)
@@ -99,6 +106,3 @@ def load_config(config_file: str | None = None) -> ProxyConfig:
             config_data[config_key] = value
 
     return ProxyConfig(**config_data)
-
-
-# mypy: ignore_errors

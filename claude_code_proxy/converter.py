@@ -72,7 +72,10 @@ def parse_json_arguments(arguments: Any, context_name: str, context_type: str = 
             "parse_error": str(e),
             "error_position": error_pos,
             f"{context_type}_name": context_name,
-            "instruction": f"The JSON arguments for {context_type} '{context_name}' are malformed at {str(e)}. Please retry with valid JSON. Common issues: unescaped quotes, missing commas, or incomplete brackets.",
+            "instruction": (
+                f"The JSON arguments for {context_type} '{context_name}' are malformed at {str(e)}. "
+                "Please retry with valid JSON. Common issues: unescaped quotes, missing commas, or incomplete brackets."
+            ),
         }
 
 
@@ -223,7 +226,7 @@ def openai_to_anthropic_response(openai_resp: dict[str, Any]) -> dict[str, Any]:
             # Map OpenAI reasoning to Anthropic thinking blocks
             reasoning_content = item.get("content", "")
             logger.info(
-                f"[REASONING BLOCK] Received from OpenAI: {reasoning_content[:200]}{'...' if len(str(reasoning_content)) > 200 else ''}"
+                f"[REASONING BLOCK] Received from OpenAI: {reasoning_content[:200]}{'...' if len(str(reasoning_content)) > 200 else ''}",  # noqa: E501
             )
             anthropic_resp["content"].append({"type": "thinking", "text": reasoning_content})
 
