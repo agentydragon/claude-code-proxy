@@ -281,6 +281,9 @@ async def handle_anthropic(
 
     if anthropic_req.get("stream"):
         try:
+            # Use OpenAI client library streaming handler
+            from .streaming import stream_handler
+
             return StreamingResponse(stream_handler(openai_request, request_id), media_type="text/event-stream")
         except Exception as e:
             logger.exception(f"Streaming error: {e}")
@@ -357,8 +360,7 @@ async def index(request: Request) -> TemplateResponse:
     """Root endpoint - flow visualization landing page."""
     logs_root = log_dir.parent
     return templates.TemplateResponse(
-        "index.html",
-        {"request": request, "session": session_id, "logs_root": str(logs_root)}
+        "index.html", {"request": request, "session": session_id, "logs_root": str(logs_root)}
     )
 
 

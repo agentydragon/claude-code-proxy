@@ -11,20 +11,20 @@
             padding: 0;
             box-sizing: border-box;
         }
-        
+
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
             background-color: #0a0e27;
             color: #e0e6ed;
             line-height: 1.6;
         }
-        
+
         .container {
             max-width: 1200px;
             margin: 0 auto;
             padding: 20px;
         }
-        
+
         header {
             text-align: center;
             margin-bottom: 60px;
@@ -33,19 +33,19 @@
             border-radius: 15px;
             box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
         }
-        
+
         h1 {
             font-size: 3em;
             margin-bottom: 10px;
             color: #fff;
             text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.3);
         }
-        
+
         .subtitle {
             font-size: 1.2em;
             color: #b8c5d6;
         }
-        
+
         .flow-diagram {
             background: #151b2d;
             border-radius: 15px;
@@ -53,7 +53,7 @@
             margin-bottom: 40px;
             box-shadow: 0 5px 20px rgba(0, 0, 0, 0.3);
         }
-        
+
         .flow-container {
             display: flex;
             justify-content: space-between;
@@ -61,7 +61,7 @@
             position: relative;
             margin: 40px 0;
         }
-        
+
         .entity {
             background: #1e2538;
             border: 2px solid #3a4660;
@@ -73,24 +73,24 @@
             position: relative;
             z-index: 2;
         }
-        
+
         .entity:hover {
             transform: translateY(-5px);
             box-shadow: 0 10px 25px rgba(0, 0, 0, 0.4);
             border-color: #5a7fdb;
         }
-        
+
         .entity h3 {
             color: #5a7fdb;
             margin-bottom: 10px;
             font-size: 1.3em;
         }
-        
+
         .entity p {
             color: #8892b0;
             font-size: 0.9em;
         }
-        
+
         .arrow-container {
             flex: 1;
             display: flex;
@@ -99,7 +99,7 @@
             position: relative;
             height: 100px;
         }
-        
+
         .arrow {
             position: absolute;
             width: 100%;
@@ -107,7 +107,7 @@
             align-items: center;
             justify-content: center;
         }
-        
+
         .arrow-line {
             flex: 1;
             height: 3px;
@@ -115,12 +115,12 @@
             position: relative;
             animation: pulse 2s ease-in-out infinite;
         }
-        
+
         @keyframes pulse {
             0%, 100% { opacity: 0.6; }
             50% { opacity: 1; }
         }
-        
+
         .arrow-head {
             width: 0;
             height: 0;
@@ -129,7 +129,7 @@
             border-bottom: 10px solid transparent;
             margin-left: -2px;
         }
-        
+
         .arrow-label {
             position: absolute;
             top: -25px;
@@ -143,14 +143,14 @@
             white-space: nowrap;
             border: 1px solid #3a4660;
         }
-        
+
         .features {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
             gap: 20px;
             margin-bottom: 40px;
         }
-        
+
         .feature-card {
             background: #151b2d;
             border: 1px solid #2a3550;
@@ -158,13 +158,13 @@
             padding: 25px;
             transition: all 0.3s ease;
         }
-        
+
         .feature-card:hover {
             transform: translateY(-3px);
             box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
             border-color: #5a7fdb;
         }
-        
+
         .feature-card h4 {
             color: #5a7fdb;
             margin-bottom: 10px;
@@ -172,16 +172,16 @@
             align-items: center;
             gap: 10px;
         }
-        
+
         .feature-card .icon {
             font-size: 1.5em;
         }
-        
+
         .feature-card p {
             color: #8892b0;
             font-size: 0.95em;
         }
-        
+
         .endpoints {
             background: #151b2d;
             border-radius: 15px;
@@ -189,18 +189,18 @@
             margin-bottom: 40px;
             box-shadow: 0 5px 20px rgba(0, 0, 0, 0.3);
         }
-        
+
         .endpoints h2 {
             color: #5a7fdb;
             margin-bottom: 20px;
             text-align: center;
         }
-        
+
         .endpoint-list {
             display: grid;
             gap: 15px;
         }
-        
+
         .endpoint {
             background: #1e2538;
             border: 1px solid #3a4660;
@@ -211,12 +211,12 @@
             gap: 15px;
             transition: all 0.3s ease;
         }
-        
+
         .endpoint:hover {
             border-color: #5a7fdb;
             transform: translateX(5px);
         }
-        
+
         .method {
             background: #2ecc71;
             color: #fff;
@@ -227,28 +227,28 @@
             min-width: 60px;
             text-align: center;
         }
-        
+
         .method.post {
             background: #3498db;
         }
-        
+
         .endpoint-path {
             color: #e0e6ed;
             font-family: 'Courier New', monospace;
             font-size: 1.1em;
         }
-        
+
         .endpoint-desc {
             color: #8892b0;
             margin-left: auto;
             font-size: 0.9em;
         }
-        
+
         .links {
             text-align: center;
             margin-top: 40px;
         }
-        
+
         .links a {
             display: inline-block;
             background: #2a5298;
@@ -260,13 +260,13 @@
             transition: all 0.3s ease;
             font-weight: 500;
         }
-        
+
         .links a:hover {
             background: #3a6ab8;
             transform: translateY(-2px);
             box-shadow: 0 5px 15px rgba(42, 82, 152, 0.4);
         }
-        
+
         footer {
             text-align: center;
             margin-top: 60px;
@@ -274,7 +274,7 @@
             color: #4a5568;
             font-size: 0.9em;
         }
-        
+
         /* Flow visualization styles */
         .flow-visualization {
             background: #151b2d;
@@ -283,40 +283,40 @@
             margin-bottom: 40px;
             box-shadow: 0 5px 20px rgba(0, 0, 0, 0.3);
         }
-        
+
         .flow-visualization h2 {
             color: #5a7fdb;
             margin-bottom: 20px;
             text-align: center;
         }
-        
+
         .flow-visualization svg {
             width: 100%;
             background: #1e2538;
             border-radius: 10px;
             margin-bottom: 20px;
         }
-        
-        .flow-row { 
+
+        .flow-row {
             cursor: pointer;
             stroke-width: 2px;
             transition: stroke-width 0.3s ease;
         }
-        
-        .flow-dot { 
+
+        .flow-dot {
             stroke: #000;
             cursor: pointer;
             transition: r 0.3s ease;
         }
-        
-        .highlight { 
+
+        .highlight {
             stroke-width: 4px !important;
         }
-        
+
         .flow-dot.highlight {
             r: 8 !important;
         }
-        
+
         #details {
             background: #1e2538;
             border: 1px solid #3a4660;
@@ -332,11 +332,11 @@
             margin-top: 20px;
             display: none;
         }
-        
+
         #details.show {
             display: block;
         }
-        
+
         .session-info {
             text-align: center;
             color: #8892b0;
@@ -351,7 +351,7 @@
             <h1>Claude Code Proxy</h1>
             <p class="subtitle">Anthropic Messages API → OpenAI Chat Completion API</p>
         </header>
-        
+
         <div class="flow-diagram">
             <h2 style="text-align: center; color: #5a7fdb; margin-bottom: 30px;">Request Flow</h2>
             <div class="flow-container">
@@ -359,7 +359,7 @@
                     <h3>Claude Code</h3>
                     <p>Anthropic Client</p>
                 </div>
-                
+
                 <div class="arrow-container">
                     <div class="arrow">
                         <div class="arrow-line"></div>
@@ -367,12 +367,12 @@
                         <div class="arrow-label">Messages API</div>
                     </div>
                 </div>
-                
+
                 <div class="entity" style="background: #1a2f5a; border-color: #2a5298;">
                     <h3>Proxy Server</h3>
                     <p>API Translation</p>
                 </div>
-                
+
                 <div class="arrow-container">
                     <div class="arrow">
                         <div class="arrow-line"></div>
@@ -380,14 +380,14 @@
                         <div class="arrow-label">Chat Completion API</div>
                     </div>
                 </div>
-                
+
                 <div class="entity">
                     <h3>OpenAI</h3>
                     <p>GPT Models</p>
                 </div>
             </div>
         </div>
-        
+
         <div class="features">
             <div class="feature-card">
                 <h4><span class="icon">🔄</span> API Translation</h4>
@@ -414,14 +414,14 @@
                 <p>JSONL format logging for all requests and responses</p>
             </div>
         </div>
-        
+
         <div class="flow-visualization">
             <h2>Request-Response Flows</h2>
             <p class="session-info">Session: {{ session }}</p>
             <svg width="960" height="400"></svg>
             <div id="details"></div>
         </div>
-        
+
         <div class="endpoints">
             <h2>API Endpoints</h2>
             <div class="endpoint-list">
@@ -442,21 +442,21 @@
                 </div>
             </div>
         </div>
-        
+
         <div class="links">
             <a href="/health">Health Status</a>
         </div>
-        
+
         <footer>
             <p>Claude Code Proxy - Bridging Anthropic and OpenAI APIs</p>
         </footer>
     </div>
-    
+
     <script>
         // Load flow data and render visualization
         const params = new URLSearchParams(window.location.search);
         const session = params.get('session') || '{{ session }}';
-        
+
         fetch(`/data?session=${session}`)
             .then(res => res.json())
             .then(data => {
@@ -475,41 +475,41 @@
         function render(flows) {
             // Validate flows data
             flows.forEach(f => {
-                if (!f.anthropic_request || !f.anthropic_request.timestamp) 
+                if (!f.anthropic_request || !f.anthropic_request.timestamp)
                     console.warn(`Missing anthropic_request timestamp for flow ${f.request_id}`);
-                if (!f.openai_request || !f.openai_request.timestamp) 
+                if (!f.openai_request || !f.openai_request.timestamp)
                     console.warn(`Missing openai_request timestamp for flow ${f.request_id}`);
-                if (!f.openai_response || !f.openai_response.timestamp) 
+                if (!f.openai_response || !f.openai_response.timestamp)
                     console.warn(`Missing openai_response timestamp for flow ${f.request_id}`);
-                if (!f.anthropic_response || !f.anthropic_response.timestamp) 
+                if (!f.anthropic_response || !f.anthropic_response.timestamp)
                     console.warn(`Missing anthropic_response timestamp for flow ${f.request_id}`);
             });
-            
+
             const svg = d3.select('.flow-visualization svg');
             const width = 960;
             const height = 400;
             const rowHeight = 30;
             const margin = { top: 20, right: 50, bottom: 20, left: 100 };
-            
+
             // Clear any existing content
             svg.selectAll("*").remove();
-            
+
             // Collect all timestamps
             const times = flows.flatMap(f => {
                 const ts = [];
-                if (f.anthropic_request && f.anthropic_request.timestamp) 
+                if (f.anthropic_request && f.anthropic_request.timestamp)
                     ts.push(f.anthropic_request.timestamp);
-                if (f.openai_request && f.openai_request.timestamp) 
+                if (f.openai_request && f.openai_request.timestamp)
                     ts.push(f.openai_request.timestamp);
-                if (f.openai_response && f.openai_response.timestamp) 
+                if (f.openai_response && f.openai_response.timestamp)
                     ts.push(f.openai_response.timestamp);
-                if (f.anthropic_response && f.anthropic_response.timestamp) 
+                if (f.anthropic_response && f.anthropic_response.timestamp)
                     ts.push(f.anthropic_response.timestamp);
                 return ts;
             });
-            
+
             if (times.length === 0) return;
-            
+
             const x = d3.scaleLinear()
                 .domain(d3.extent(times))
                 .range([margin.left, width - margin.right]);
@@ -517,21 +517,21 @@
             // Add axis labels
             const stages = ['Anthropic Request', 'OpenAI Request', 'OpenAI Response', 'Anthropic Response'];
             const stageSpacing = 15;
-            
+
             flows.forEach((f, i) => {
                 const y = i * rowHeight + margin.top + 30;
                 const color = d3.schemeCategory10[i % 10];
                 const seq = [];
-                
-                if (f.anthropic_request && f.anthropic_request.timestamp) 
+
+                if (f.anthropic_request && f.anthropic_request.timestamp)
                     seq.push(['anthropic_request', f.anthropic_request.timestamp]);
-                if (f.openai_request && f.openai_request.timestamp) 
+                if (f.openai_request && f.openai_request.timestamp)
                     seq.push(['openai_request', f.openai_request.timestamp]);
-                if (f.openai_response && f.openai_response.timestamp) 
+                if (f.openai_response && f.openai_response.timestamp)
                     seq.push(['openai_response', f.openai_response.timestamp]);
-                if (f.anthropic_response && f.anthropic_response.timestamp) 
+                if (f.anthropic_response && f.anthropic_response.timestamp)
                     seq.push(['anthropic_response', f.anthropic_response.timestamp]);
-                
+
                 // Draw connecting line
                 if (seq.length > 1) {
                     svg.append('path')
@@ -542,7 +542,7 @@
                         .on('mouseover', function() { d3.select(this).classed('highlight', true); })
                         .on('mouseout', function() { d3.select(this).classed('highlight', false); });
                 }
-                
+
                 // Draw dots for each stage
                 seq.forEach(([k, t], idx) => {
                     svg.append('circle')
@@ -557,7 +557,7 @@
                             const info = { request_id: f.request_id, stage: k, data: f[k] };
                             const details = document.getElementById('details');
                             const text = JSON.stringify(info, null, 2);
-                            
+
                             if (details.textContent === text) {
                                 details.textContent = '';
                                 details.classList.remove('show');
@@ -568,14 +568,14 @@
                         });
                 });
             });
-            
+
             // Add time axis
             const xAxis = d3.axisBottom(x)
                 .tickFormat(d => {
                     const date = new Date(d * 1000);
                     return d3.timeFormat('%H:%M:%S')(date);
                 });
-                
+
             svg.append('g')
                 .attr('transform', `translate(0, ${height - margin.bottom})`)
                 .call(xAxis)
