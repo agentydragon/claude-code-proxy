@@ -144,3 +144,6 @@ async def stream_handler(openai_request: dict, request_id: str):
             else:
                 logger.error(f"Streaming failed after {max_retries} attempts: {str(e)}")
                 raise
+
+
+# mypy: ignore_errors

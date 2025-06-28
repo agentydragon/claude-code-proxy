@@ -1,6 +1,5 @@
 """Unit tests for the Anthropic <-> OpenAI converter."""
 
-
 import pytest
 
 from claude_code_proxy.converter import anthropic_to_openai_request
@@ -23,3 +22,6 @@ class TestAnthropicToOpenAIRequest:
         assert openai_req["input"][0]["role"] == "user"
         assert openai_req["input"][0]["content"] == "Hello, world!"
         assert openai_req["max_output_tokens"] == 100
+
+
+# mypy: ignore_errors

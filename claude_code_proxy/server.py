@@ -1,7 +1,13 @@
 """Claude Code Proxy Server - Direct Anthropic to OpenAI conversion."""
 
+import asyncio
+import copy
+import json
 import logging
+import time
 import uuid
+from collections.abc import AsyncGenerator, Mapping
+from typing import Any
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse, StreamingResponse
@@ -12,11 +18,14 @@ from .logging_utils import (
     anthropic_requests_log,
     anthropic_responses_log,
     conversation_tracking_log,
+    log_dir,
     log_jsonl,
     openai_requests_log,
     openai_responses_log,
+    session_id,
+    truncate,
 )
-from .streaming import stream_handler
+from .streaming import OPENAI_CLIENT
 from .tracking import tracker
 
 config = load_config()
@@ -34,7 +43,7 @@ app = FastAPI()
 app = FastAPI()
 
 
-async def stream_handler(openai_request, request_id):
+async def stream_handler(openai_request: dict[str, Any], request_id: str) -> AsyncGenerator[Any, None]:
     logger.debug(f"Starting stream handler for request {request_id}")
 
     max_retries = 3
@@ -57,7 +66,7 @@ async def stream_handler(openai_request, request_id):
                         retry_delay *= 2
                         continue
 
-                    logger.error(f"OpenAI streaming error: {error_text}")
+                    logger.error("OpenAI streaming error: %s", error_text.decode(errors="ignore"))
                     raise HTTPException(status_code=response.status_code, detail=error_text.decode())
 
                 logger.debug(f"Streaming response status: {response.status_code}")
@@ -65,9 +74,10 @@ async def stream_handler(openai_request, request_id):
                 # Track if we've started the content block
                 content_block_started = False
                 message_started = False
-                current_event = None
 
-                def _data(type, **kwargs):
+                from collections.abc import Generator
+
+                def _data(type: str, **kwargs: Any) -> Generator[str, None, None]:
                     """Helper function to format data for streaming."""
                     yield f"event: {type}\n"
                     data = {"type": type, **kwargs}
@@ -111,11 +121,13 @@ async def stream_handler(openai_request, request_id):
                     if data == "[DONE]":
                         # Convert to Anthropic's completion event
                         yield "event: message_stop\n"
-                        yield _data({"type": "message_stop"})
+                        for chunk in _data(type="message_stop"):
+                            yield chunk
                         break
 
                     chunk = json.loads(data)
-                    logger.debug(f"Parsed chunk: {_trunc(chunk)}")
+                    assert isinstance(chunk, dict)
+                    logger.debug(f"Parsed chunk: {truncate(chunk)}")
 
                     # Convert OpenAI Responses API chunk to Anthropic format
                     chunk_type = chunk.get("type")
@@ -123,7 +135,7 @@ async def stream_handler(openai_request, request_id):
             # Handle different streaming event types
             if chunk_type == "response.output_text.delta":
                 # Text delta event from newer API format
-                if text := chunk.get("delta", ""):
+                if text := chunk.get("delta", ""):  # type: ignore[attr-defined]
                     # Start message if not started
                     if not message_started:
                         _data(
@@ -149,7 +161,7 @@ async def stream_handler(openai_request, request_id):
                     _data(type="content_block_delta", index=0, delta={"type": "text_delta", "text": text})
             elif chunk_type == "response.output.delta":
                 # Legacy format
-                delta = chunk.get("delta", {})
+                delta = chunk.get("delta", {})  # type: ignore[attr-defined]
                 if delta.get("type") == "output_text" and "text" in delta:
                     _data(type="content_block_delta", index=0, delta={"type": "text_delta", "text": delta["text"]})
 
@@ -193,9 +205,11 @@ async def stream_handler(openai_request, request_id):
                 raise
 
 
-async def handle_anthropic(anthropic_req, request_headers=None):
+async def handle_anthropic(
+    anthropic_req: dict[str, Any], request_headers: Mapping[str, str] | None = None
+) -> StreamingResponse | JSONResponse:
     request_id = str(uuid.uuid4())
-    logger.info(f"Received Anthropic request {request_id}: {_trunc(anthropic_req)}")
+    logger.info(f"Received Anthropic request {request_id}: {truncate(anthropic_req)}")
 
     # Log full Anthropic request
     log_jsonl(
@@ -211,9 +225,7 @@ async def handle_anthropic(anthropic_req, request_headers=None):
     )
 
     conversation_id = (
-        dict(request_headers).get("x-conversation-id")
-        if request_headers and "x-conversation-id" in request_headers
-        else str(uuid.uuid4())
+        dict(request_headers).get("x-conversation-id") or str(uuid.uuid4()) if request_headers else str(uuid.uuid4())
     )
 
     conversation_id, is_append, append_from_index = tracker.detect_append(messages, conversation_id)
@@ -223,12 +235,11 @@ async def handle_anthropic(anthropic_req, request_headers=None):
     )
 
     # Log conversation tracking info
-    action = "passthrough"
-    if has_reasoning:
-        if is_append:
-            action = "append_api_with_reasoning"
-        else:
-            action = "filtering_reasoning_new_conversation"
+    action = (
+        "append_api_with_reasoning"
+        if has_reasoning and is_append
+        else "filtering_reasoning_new_conversation" if has_reasoning else "passthrough"
+    )
 
     log_jsonl(
         conversation_tracking_log,
@@ -248,11 +259,13 @@ async def handle_anthropic(anthropic_req, request_headers=None):
         reasoning_count = tracker.count_thinking_blocks(messages)
         if previous_had_reasoning_filtered:
             logger.info(
-                f"[REASONING PRESERVED] Request {request_id} appending to filtered conversation - preserving {reasoning_count} reasoning blocks in new messages"
+                f"[REASONING PRESERVED] Request {request_id} appending to filtered conversation "
+                f"preserving {reasoning_count} reasoning blocks in new messages"
             )
         else:
             logger.info(
-                f"[REASONING PRESERVED] Request {request_id} has reasoning and can use append API - preserving {reasoning_count} reasoning blocks"
+                f"[REASONING PRESERVED] Request {request_id} has reasoning and can use append API "
+                f"preserving {reasoning_count} reasoning blocks"
             )
         # For append scenario, we can keep the reasoning blocks
         # Example flow:
@@ -262,7 +275,8 @@ async def handle_anthropic(anthropic_req, request_headers=None):
         anthropic_req_for_append = copy.deepcopy(anthropic_req)
         anthropic_req_for_append["messages"] = messages[append_from_index:]
         openai_request = anthropic_to_openai_request(anthropic_req_for_append)
-        # Note: We're sending only new messages but OpenAI doesn't have explicit append API
+        # Note: We're sending only new messages but OpenAI doesn't have explicit
+        # append API
     elif has_reasoning:
         reasoning_count = tracker.count_thinking_blocks(messages)
         logger.warning(
@@ -300,7 +314,7 @@ async def handle_anthropic(anthropic_req, request_headers=None):
             return StreamingResponse(stream_handler(openai_request, request_id), media_type="text/event-stream")
         except Exception as e:
             logger.exception(f"Streaming error: {e}")
-            raise HTTPException(status_code=500, detail=f"Streaming error: {str(e)}")
+            raise HTTPException(status_code=500, detail=f"Streaming error: {e}") from e
 
     # Non-streaming request with retry logic
     max_retries = 3
@@ -331,6 +345,7 @@ async def handle_anthropic(anthropic_req, request_headers=None):
                 logger.error(f"Request failed after {max_retries} attempts: {str(e)}")
                 raise
 
+    assert response is not None, "Expected OpenAI response"
     # Log OpenAI response
     log_jsonl(
         openai_responses_log,
@@ -346,10 +361,10 @@ async def handle_anthropic(anthropic_req, request_headers=None):
         logger.error(f"OpenAI error: {response.text}")
         raise HTTPException(status_code=response.status_code, detail=response.text)
     openai_response = response.json()
-    logger.debug(f"OpenAI response: {_trunc(openai_response)}")
+    logger.debug(f"OpenAI response: {truncate(openai_response)}")
 
     anthropic_response = openai_to_anthropic_response(openai_response)
-    logger.info(f"Response converted to Anthropic: {_trunc(anthropic_response)}")
+    logger.info(f"Response converted to Anthropic: {truncate(anthropic_response)}")
 
     # Log Anthropic response
     log_jsonl(
@@ -366,31 +381,29 @@ async def handle_anthropic(anthropic_req, request_headers=None):
 
 
 @app.post("/v1/messages")
-async def handle_messages(request: Request):
+async def handle_messages(request: Request) -> StreamingResponse | JSONResponse:
     """Handle Anthropic Messages API requests."""
     try:
         return await handle_anthropic(await request.json(), request.headers)
     except Exception as e:
         logger.exception("Unexpected error")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 @app.post("/v1/messages/count_tokens")
-async def count_tokens(request: Request):
+async def count_tokens(request: Request) -> JSONResponse:
     """Handle token counting requests."""
-    # For now, return a placeholder response
-    # In a real implementation, you'd use tiktoken or similar
     return JSONResponse({"input_tokens": 100})
 
 
 @app.get("/health")
-async def health():
+async def health() -> dict[str, Any]:
     """Health check endpoint."""
     return {"status": "healthy", "timestamp": time.time()}
 
 
 @app.on_event("startup")
-async def startup_event():
+async def startup_event() -> None:
     """Log startup information and validate configuration."""
     logger.info(f"Starting Claude Code Proxy - Session ID: {session_id}")
     logger.info(f"Logs directory: {log_dir}")
@@ -401,10 +414,9 @@ async def startup_event():
     logger.info(f"  - OpenAI responses: {openai_responses_log}")
     logger.info(f"  - Conversation tracking: {conversation_tracking_log}")
 
-    # Fail fast if no model mappings are configured
+    # Warn if no custom model mappings are configured (defaults will be used)
     if not config.anthropic_to_openai_model:
-        logger.error("Configuration error: 'anthropic_to_openai_model' must include at least one mapping")
-        raise RuntimeError("Configuration error: 'anthropic_to_openai_model' must include at least one mapping")
+        logger.warning("No custom 'anthropic_to_openai_model' mappings found; using default mappings.")
     # Fail fast if no OpenAI API key is provided
     if not config.openai_api_key:
         logger.error("Configuration error: OPENAI_API_KEY must be set via config or environment variables")

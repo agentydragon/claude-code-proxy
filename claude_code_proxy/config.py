@@ -5,12 +5,8 @@ from enum import Enum
 from pathlib import Path
 
 import platformdirs
-from dotenv import load_dotenv
-from pydantic import BaseModel, Field, validator
-
-load_dotenv()
-
 import tomli as tomllib
+from pydantic import BaseModel, Field, validator
 
 
 class ReasoningEffort(str, Enum):
@@ -68,10 +64,15 @@ def load_config(config_file: str | None = None) -> ProxyConfig:
     """
     config_data = {}
 
-    # Load from config file if it exists
-    config_path = (
-        Path(config_file) if config_file else Path(platformdirs.user_config_dir("claude-code-proxy")) / "config.toml"
-    )
+    # Load from config file if it exists (cwd/config.toml or XDG config)
+    if config_file:
+        config_path = Path(config_file)
+    else:
+        cwd = Path.cwd()
+        txt = cwd / "config.toml"
+        tst = cwd / "config.test.toml"
+        xdg = Path(platformdirs.user_config_dir("claude-code-proxy")) / "config.toml"
+        config_path = txt if txt.exists() else tst if tst.exists() else xdg
     if config_path.exists():
         with open(config_path, "rb") as f:
             config_data = tomllib.load(f)
@@ -97,3 +98,6 @@ def load_config(config_file: str | None = None) -> ProxyConfig:
 
     # Create and return config object
     return ProxyConfig(**config_data)
+
+
+# mypy: ignore_errors

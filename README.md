@@ -41,11 +41,10 @@ If the configuration file is not present, you can use environment variables inst
 # OpenAI API key (required)
 openai_api_key = "sk-...your-openai-key..."
 
-# Mapping from Anthropic model names (glob patterns) to OpenAI model IDs
-anthropic_to_openai_model = {
-  "claude-opus-4-*" = "gpt-4",
-  "claude-3-5-*"   = "gpt-3.5-turbo"
-}
+#[anthropic_to_openai_model] # Mapping from Anthropic model names (glob patterns) to OpenAI model IDs
+[anthropic_to_openai_model]
+"claude-opus-4-*" = "gpt-4"
+"claude-3-5-*"   = "gpt-3.5-turbo"
 
 # Server settings (optional)
 host = "0.0.0.0"
@@ -63,6 +62,19 @@ log_level = "INFO"         # one of: DEBUG, INFO, WARNING, ERROR
 - `PROXY_HOST`      (overrides `host`)
 - `PROXY_PORT`      (overrides `port`)
 - `LOG_LEVEL`       (overrides `log_level`)
+
+## Claude Code setup
+
+Drop this in `~/.claude/settings.json`:
+
+```json
+{
+  "env": {
+    "ANTHROPIC_BASE_URL": "http://localhost:8082",
+    "ANTHROPIC_AUTH_TOKEN": "sk-claude-code-proxy-static-key"
+  }
+}
+```
 
 ## Usage
 

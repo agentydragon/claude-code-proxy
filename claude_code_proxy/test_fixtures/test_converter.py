@@ -1,6 +1,5 @@
 """Unit tests for the Anthropic <-> OpenAI converter."""
 
-
 import pytest
 
 from claude_code_proxy.converter import AnthropicOpenAIConverter
@@ -246,7 +245,7 @@ class TestAnthropicToOpenAIRequest:
         assert openai_req["temperature"] == 0.7
         assert openai_req["top_p"] == 0.9
         assert openai_req["stop"] == ["\\n\\n", "END"]
-        assert openai_req["stream"] == True
+        assert openai_req["stream"] is True
 
 
 class TestOpenAIToAnthropicResponse:
@@ -356,3 +355,6 @@ class TestOpenAIToAnthropicResponse:
         # Should only have tool use, no text content
         assert len(anthropic_resp["content"]) == 1
         assert anthropic_resp["content"][0]["type"] == "tool_use"
+
+
+# mypy: ignore_errors

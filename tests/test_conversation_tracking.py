@@ -1,8 +1,9 @@
 """Tests for conversation tracking and reasoning utilities."""
 
 import pytest
+
+from claude_code_proxy.converter import _convert_tool_call_to_function_call, parse_json_arguments
 from claude_code_proxy.tracking import tracker
-from claude_code_proxy.converter import parse_json_arguments, _convert_tool_call_to_function_call
 
 # Aliases for legacy test names
 _messages_equal_ignoring_thinking = tracker.messages_equal_ignoring_thinking
@@ -82,12 +83,84 @@ class TestConverterHelpers:
 class TestConversationLogic:
     def test_append_concept(self):
         # simple prefix match
-        cached = [{"role": "u", "content": "1"}, {"role": "a", "content": "ok"}]
-        new = cached + [{"role": "u", "content": "2"}]
-        tracker.update("c1", cached, False, False)
-        cid, is_app, idx = tracker.detect_append(new, "x")
-        assert is_app and idx == len(cached)
+        tracker._cache.clear()
+        tracker._index.clear()
+        initial_messages = [{"role": "u", "content": "1"}, {"role": "a", "content": "ok"}]
+        appended_messages = initial_messages + [{"role": "u", "content": "2"}]
+        tracker.update(
+            "c1",
+            initial_messages,
+            had_reasoning_filtered=False,
+            original_had_reasoning=False,
+        )
+        conversation_id, is_append, append_index = tracker.detect_append(appended_messages, "x")
+        assert conversation_id == "c1"
+        assert is_append and append_index == len(initial_messages)
+
+    def test_detect_no_append_on_mismatch(self):
+        # prefix differs -> no append
+        tracker._cache.clear()
+        tracker._index.clear()
+        original_messages = [{"role": "u", "content": "A"}, {"role": "a", "content": "B"}]
+        tracker.update(
+            "c1",
+            original_messages,
+            had_reasoning_filtered=False,
+            original_had_reasoning=False,
+        )
+        mismatched_messages = [{"role": "u", "content": "A"}, {"role": "a", "content": "C"}]
+        conversation_id, is_append, append_index = tracker.detect_append(mismatched_messages, "x")
+        assert conversation_id == "x"
+        assert not is_append and append_index == -1
+
+    def test_multiple_sequential_appends(self):
+        # multiple updates preserve append detection
+        tracker._cache.clear()
+        tracker._index.clear()
+        messages1 = [{"role": "u", "content": "1"}]
+        tracker.update(
+            "c1",
+            messages1,
+            had_reasoning_filtered=False,
+            original_had_reasoning=False,
+        )
+        messages2 = messages1 + [{"role": "a", "content": "response"}]
+        conv_id1, is_append1, append_index1 = tracker.detect_append(messages2, "x")
+        assert conv_id1 == "c1"
+        assert is_append1 and append_index1 == len(messages1)
+        tracker.update(
+            conv_id1,
+            messages2,
+            had_reasoning_filtered=False,
+            original_had_reasoning=False,
+        )
+        messages3 = messages2 + [{"role": "u", "content": "2"}]
+        conv_id2, is_append2, append_index2 = tracker.detect_append(messages3, "x")
+        assert conv_id2 == "c1"
+        assert is_append2 and append_index2 == len(messages2)
+
+    def test_thinking_blocks_ignored_in_append(self):
+        # thinking blocks don't break append detection
+        tracker._cache.clear()
+        tracker._index.clear()
+        original_messages = [
+            {"role": "assistant", "content": [{"type": "thinking", "text": "X"}, {"type": "text", "text": "Y"}]}
+        ]
+        tracker.update(
+            "c1",
+            original_messages,
+            had_reasoning_filtered=False,
+            original_had_reasoning=False,
+        )
+        new_messages = [
+            {"role": "assistant", "content": [{"type": "thinking", "text": "Z"}, {"type": "text", "text": "Y"}]},
+            {"role": "user", "content": "next"},
+        ]
+        conversation_id, is_append, append_index = tracker.detect_append(new_messages, "x")
+        assert conversation_id == "c1"
+        assert is_append and append_index == 1
 
 
 if __name__ == "__main__":
     pytest.main([__file__])
+# mypy: ignore_errors

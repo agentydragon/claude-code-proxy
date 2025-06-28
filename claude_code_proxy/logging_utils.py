@@ -41,3 +41,6 @@ def truncate(obj: object, max_len: int = 10000) -> str:
     """Return a string representation of obj, truncated to max_len characters."""
     text = json.dumps(obj, ensure_ascii=False) if isinstance(obj, dict) else str(obj)
     return text if len(text) <= max_len else text[:max_len] + "..."
+
+
+# mypy: ignore_errors

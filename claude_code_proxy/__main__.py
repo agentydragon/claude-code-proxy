@@ -7,7 +7,7 @@ import uvicorn
 from .server import app, config
 
 
-def main():
+def main() -> None:
     """Main entry point."""
     parser = argparse.ArgumentParser(
         description="Claude Code Proxy - Use Anthropic clients with OpenAI/Gemini models",
@@ -35,7 +35,10 @@ Examples:
 
     args = parser.parse_args()
 
+    from .logging_utils import log_dir
+
     print(f"Starting Claude Code Proxy on http://{args.host}:{args.port}")
+    print(f"Logs directory: {log_dir}")
 
     # Run with specified settings
     uvicorn.run(app, host=args.host, port=args.port, log_level=args.log_level)

@@ -12,16 +12,26 @@ repos:
       - id: debug-statements
       - id: mixed-line-ending
 
+  - repo: https://github.com/psf/black
+    rev: 23.12.0
+    hooks:
+      - id: black
+        language_version: python3
+
   - repo: https://github.com/astral-sh/ruff-pre-commit
     rev: v0.1.9
     hooks:
       - id: ruff
         args: [--fix]
-      - id: ruff-format
+
+  - repo: https://github.com/asottile/pyupgrade
+    rev: main
+    hooks:
+      - id: pyupgrade
+        args: [--py310-plus]
 
   - repo: https://github.com/pre-commit/mirrors-mypy
     rev: v1.8.0
     hooks:
       - id: mypy
-        additional_dependencies: [types-all]
         args: [--strict]

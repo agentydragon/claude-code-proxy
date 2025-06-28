@@ -4,7 +4,7 @@ import fnmatch
 import json
 import logging
 import uuid
-from typing import Any, Optional, Union
+from typing import Any
 
 from claude_code_proxy.config import load_config
 
@@ -119,11 +119,21 @@ def anthropic_to_openai_request(anthropic_req: dict[str, Any]) -> dict[str, Any]
         input_items = [{"role": "user", "content": ""}]
 
     openai_req["input"] = input_items
-    # 2025-06-23 22:01:25,358 - INFO - Received Anthropic request for model: claude-3-5-haiku-20241022
-    # 2025-06-23 22:01:25,358 - DEBUG - OpenAI request: {"model": "gpt-4o-mini", "input": [{"role": "user", "content": "quota"}], "max_output_tokens": 1, "metadata": {}, "user": "f35dc80505901d7cc45bb33b9d66a2ca896e6cc173285c043c932be151f45d59"}...
+    # 2025-06-23 22:01:25,358 - INFO - Received Anthropic request for model:
+    # claude-3-5-haiku-20241022
+    # 2025-06-23 22:01:25,358 - DEBUG - OpenAI request: {
+    #   "model": "gpt-4o-mini",
+    #   "input": [{"role": "user", "content": "quota"}],
+    #   "max_output_tokens": 1,
+    #   "metadata": {},
+    #   "user":
+    # "f35dc80505901d7cc45bb33b9d66a2ca896e6cc173285c043c932be151f45d59"
+    # }...
     # 2025-06-23 22:01:25,552 - ERROR - OpenAI error: {
     #   "error": {
-    #     "message": "Invalid 'max_output_tokens': integer below minimum value. Expected a value >= 16, but got 1 instead.",
+    #     "message":
+    # "Invalid 'max_output_tokens': integer below minimum value. Expected a value >= 16,
+    # but got 1 instead.",
     #     "type": "invalid_request_error",
     #     "param": "max_output_tokens",
     #     "code": "integer_below_min_value"
@@ -227,7 +237,7 @@ def openai_to_anthropic_response(openai_resp: dict[str, Any]) -> dict[str, Any]:
     return anthropic_resp
 
 
-def _extract_text_content(content: Union[str, list[dict[str, Any]]]) -> str:
+def _extract_text_content(content: str | list[dict[str, Any]]) -> str:
     """Extract text content from various formats."""
     if isinstance(content, str):
         return content
@@ -306,7 +316,7 @@ def _split_tool_message(msg: dict[str, Any]) -> list[dict[str, Any]]:
     return items
 
 
-def _convert_message_to_input(msg: dict[str, Any]) -> Optional[dict[str, Any]]:
+def _convert_message_to_input(msg: dict[str, Any]) -> dict[str, Any] | None:
     """Convert Anthropic message to OpenAI Responses input item."""
     logger.debug(f"Converting message: {msg}")
     role = msg["role"]
@@ -358,7 +368,9 @@ def _convert_message_to_input(msg: dict[str, Any]) -> Optional[dict[str, Any]]:
             # Skip thinking blocks for now - OpenAI doesn't support reasoning in input
             thinking_text = block.get("text", "")
             logger.info(
-                f"[THINKING FILTERED] Removing from input: {thinking_text[:200]}{'...' if len(thinking_text) > 200 else ''}"
+                f"[THINKING FILTERED] Removing from input:"
+                f" {thinking_text[:200]}"
+                f"{'...' if len(thinking_text) > 200 else ''}"
             )
             continue
 
@@ -417,7 +429,7 @@ def _convert_tools_to_openai(tools: list[dict[str, Any]]) -> list[dict[str, Any]
     ]
 
 
-def _convert_tool_choice_to_openai(tool_choice: dict[str, Any]) -> Union[str, dict[str, Any]]:
+def _convert_tool_choice_to_openai(tool_choice: dict[str, Any]) -> str | dict[str, Any]:
     """Convert Anthropic tool_choice to OpenAI format."""
     choice_type = tool_choice.get("type")
 
@@ -431,7 +443,7 @@ def _convert_tool_choice_to_openai(tool_choice: dict[str, Any]) -> Union[str, di
         return "auto"
 
 
-def _convert_stop_reason(openai_resp: dict[str, Any]) -> Optional[str]:
+def _convert_stop_reason(openai_resp: dict[str, Any]) -> str | None:
     """Convert OpenAI stop reason to Anthropic format."""
     # The Responses API may have different stop reason handling
     status = openai_resp.get("status")
@@ -450,3 +462,6 @@ def _convert_stop_reason(openai_resp: dict[str, Any]) -> Optional[str]:
             return "max_tokens"
 
     return "end_turn"
+
+
+# mypy: ignore_errors

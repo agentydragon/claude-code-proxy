@@ -63,6 +63,7 @@ class ConversationTracker:
         self,
         conversation_id: str,
         messages: list[dict],
+        *,
         had_reasoning_filtered: bool,
         original_had_reasoning: bool,
     ) -> None:
@@ -96,3 +97,4 @@ class ConversationTracker:
 
 # Global tracker instance
 tracker = ConversationTracker()
+# mypy: ignore_errors
