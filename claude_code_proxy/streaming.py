@@ -3,7 +3,7 @@
 import logging
 
 from fastapi import HTTPException
-from openai import OpenAI
+from openai import AsyncOpenAI
 
 from .config import load_config
 
@@ -19,8 +19,8 @@ async def stream_handler(openai_request: dict, request_id: str):
     logger.debug(f"Starting stream handler for request {request_id}")
 
     try:
-        client = OpenAI(api_key=config.openai_api_key)
-        async with client.chat.completions.with_streaming_response.create(**openai_request) as response:
+        client = AsyncOpenAI(api_key=config.openai_api_key)
+        async with client.responses.with_streaming_response.create(**openai_request) as response:
             async for line in response.iter_lines():
                 yield f"{line}\n"
     except Exception as e:
