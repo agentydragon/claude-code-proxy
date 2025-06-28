@@ -1,137 +1,46 @@
-"""Streaming logic for OpenAI responses, including truncation helper."""
+"""OpenAI streaming via official openai package."""
 
 import json
 import logging
-import uuid
 
-import httpx
+import openai
 from fastapi import HTTPException
-from tenacity import before_sleep_log, retry, stop_after_attempt, wait_exponential
 
 from .config import load_config
-from .logging_utils import truncate
 
 config = load_config()
 logger = logging.getLogger(__name__)
+openai.api_key = config.openai_api_key
 
-OPENAI_CLIENT = httpx.AsyncClient(headers={"Authorization": f"Bearer {config.openai_api_key}"})
 
-
-@retry(
-    reraise=True,
-    stop=stop_after_attempt(3),
-    wait=wait_exponential(multiplier=1, max=4),
-    before_sleep=before_sleep_log(logger, logging.WARNING),
-)
 async def stream_handler(openai_request: dict, request_id: str):
+    """Stream assistant responses using openai.ChatCompletion.acreate."""
     logger.debug(f"Starting stream handler for request {request_id}")
 
-    async with OPENAI_CLIENT.stream(
-        "POST", "https://api.openai.com/v1/responses", json=openai_request, timeout=300.0
-    ) as response:
-        if response.status_code != 200:
-            error_text = await response.aread()
-            if response.status_code >= 500:
-                logger.warning(f"Streaming server error {response.status_code}")
-            else:
-                logger.error(f"OpenAI streaming error: {error_text}")
-                raise HTTPException(status_code=response.status_code, detail=error_text.decode())
-            raise HTTPException(status_code=response.status_code, detail=error_text.decode())
+    def _data(event_type: str, **kwargs: dict) -> list[str]:
+        payload = {"type": event_type, **kwargs}
+        return [f"event: {event_type}\n", f"data: {json.dumps(payload)}\n\n"]
 
-        logger.debug(f"Streaming response status: {response.status_code}")
-
-        content_block_started = False
-        message_started = False
-
-        def _data(type, **kwargs):
-            yield f"event: {type}\n"
-            data = {"type": type, **kwargs}
-            yield f"data: {json.dumps(data)}\n\n"
-
-        async for line in response.aiter_lines():
-            if not line.strip():
-                continue
-
-            if line.startswith("event: "):
-                event = line.removeprefix("event: ").strip()
-                logger.debug(f"Received event: {event}")
-                if event == "response.done":
-                    if content_block_started:
-                        _data(type="content_block_stop", index=0)
-                    _data(
-                        type="message_delta",
-                        delta={"stop_reason": "end_turn", "stop_sequence": None},
-                        usage={"output_tokens": 0},
-                    )
-                    _data(type="message_stop")
-                    break
-                continue
-
-            if not line.startswith("data: "):
-                logger.debug(f"Skipping non-data line: {line}")
-                continue
-
-            data = line.removeprefix("data: ")
-            if data == "[DONE]":
-                yield "event: message_stop\n"
-                yield _data(type="message_stop")
-                break
-
-            chunk = json.loads(data)
-            logger.debug(f"Parsed chunk: {truncate(chunk)}")
-            chunk_type = chunk.get("type")
-
-            if chunk_type == "response.output_text.delta":
-                if text := chunk.get("delta", ""):
-                    if not message_started:
-                        _data(
-                            type="message_start",
-                            message={
-                                "id": f"msg_{uuid.uuid4().hex}",
-                                "type": "message",
-                                "role": "assistant",
-                                "content": [],
-                                "model": openai_request.get("model", "unknown"),
-                                "stop_reason": None,
-                                "stop_sequence": None,
-                                "usage": {"input_tokens": 0, "output_tokens": 0},
-                            },
-                        )
-                        message_started = True
-
-                    if not content_block_started:
-                        _data(type="content_block_start", index=0, content_block={"type": "text", "text": ""})
-                        content_block_started = True
-
-                    _data(type="content_block_delta", index=0, delta={"type": "text_delta", "text": text})
-            elif chunk_type == "response.output.delta":
-                delta = chunk.get("delta", {})
-                if delta.get("type") == "output_text" and "text" in delta:
-                    _data(type="content_block_delta", index=0, delta={"type": "text_delta", "text": delta["text"]})
-                for i, tool_call in enumerate(delta.get("tool_calls", [])):
-                    if not (fn := tool_call.get("function")):
-                        logger.error(f"Skipping tool call without function: {tool_call}")
-                        continue
-
-                    if "name" in fn:
-                        _data(
-                            type="content_block_start",
-                            index=i + 1,
-                            content_block={
-                                "type": "tool_use",
-                                "id": tool_call.get("id", f"tool_{i}"),
-                                "name": fn["name"],
-                                "input": {},
-                            },
-                        )
-
-                    if args := fn.get("arguments"):
-                        _data(
-                            type="content_block_delta",
-                            index=i + 1,
-                            delta={"type": "input_json_delta", "partial_json": args},
-                        )
+    try:
+        async for chunk in openai.ChatCompletion.acreate(stream=True, **openai_request):
+            choice = chunk.choices[0]
+            delta = choice.delta or {}
+            if content := delta.get("content"):
+                for line in _data("content_block_delta", index=0, delta={"type": "text_delta", "text": content}):
+                    yield line
+            if choice.finish_reason is not None:
+                for line in _data(
+                    "message_delta",
+                    delta={"stop_reason": choice.finish_reason, "stop_sequence": None},
+                    usage={"output_tokens": 0},
+                ):
+                    yield line
+                for line in _data("message_stop"):
+                    yield line
                 return
+    except Exception as e:
+        logger.error("OpenAI streaming error: %s", str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 # mypy: ignore_errors

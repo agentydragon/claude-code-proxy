@@ -62,12 +62,15 @@ def find_config_path(config_file: str | None = None) -> Path:
     """Determine path to config.toml (cwd/config.toml, cwd/config.test.toml, or XDG config)."""
     if config_file:
         return Path(config_file)
-    cwd = Path.cwd()
-    txt = cwd / "config.toml"
-    tst = cwd / "config.test.toml"
+    root = Path(__file__).parent.parent
     xdg = Path(platformdirs.user_config_dir("claude-code-proxy")) / "config.toml"
-    chosen = txt if txt.exists() else tst if tst.exists() else xdg
-    logger.info(f"Candidate config paths: cwd config: {txt}, test config: {tst}, xdg config: {xdg}. Using: {chosen}")
+    txt = root / "config.toml"
+    tst = root / "config.test.toml"
+    candidates = [xdg, txt, tst]
+    for p in candidates:
+        logger.info(f"Config candidate: {p} exists={p.exists()}")
+    chosen = next((p for p in candidates if p.exists()), xdg)
+    logger.info(f"Selected config file: {chosen}")
     return chosen
 
 

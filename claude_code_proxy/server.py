@@ -12,6 +12,7 @@ from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
+from httpx import AsyncClient
 from starlette.templating import _TemplateResponse as TemplateResponse
 from tenacity import before_sleep_log, retry, stop_after_attempt, wait_exponential
 
@@ -28,10 +29,10 @@ from .logging_utils import (
     session_id,
     truncate,
 )
-from .streaming import OPENAI_CLIENT
 from .tracking import tracker
 
 config = load_config()
+OPENAI_CLIENT = AsyncClient(headers={"Authorization": f"Bearer {config.openai_api_key}"})
 
 log_level = logging._nameToLevel[config.log_level.upper()]
 logging.basicConfig(
