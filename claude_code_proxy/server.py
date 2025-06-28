@@ -351,6 +351,12 @@ async def count_tokens(request: Request) -> JSONResponse:
     return JSONResponse({"input_tokens": 100})
 
 
+@app.get("/", response_model=None)  # type: ignore[misc]
+async def index(request: Request) -> TemplateResponse:
+    """Root endpoint - flow visualization landing page."""
+    return templates.TemplateResponse("index.html", {"request": request})
+
+
 @app.get("/health", response_model=None)  # type: ignore[misc]
 async def health() -> dict[str, Any]:
     """Health check endpoint."""
