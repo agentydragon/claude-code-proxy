@@ -160,6 +160,15 @@ class TestConversationLogic:
         assert conversation_id == "c1"
         assert is_append and append_index == 1
 
+    def test_no_append_on_identical_messages(self):
+        # identical history should not count as append
+        tracker._cache.clear()
+        tracker._index.clear()
+        msgs = [{"role": "u", "content": "hi"}, {"role": "a", "content": "ok"}]
+        tracker.update("c1", msgs, had_reasoning_filtered=False, original_had_reasoning=False)
+        cid, is_append, idx = tracker.detect_append(msgs, "x")
+        assert cid == "x" and not is_append and idx == -1
+
 
 if __name__ == "__main__":
     pytest.main([__file__])

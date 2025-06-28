@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Request-Response Flows</title>
+  <script src="https://d3js.org/d3.v7.min.js"></script>
+  <style>
+    .flow-row { cursor: pointer; }
+    .flow-dot { stroke: #000; }
+    .highlight { stroke-width: 3px; }
+  </style>
+</head>
+<body>
+  <h1>Flows for session {{ session }}</h1>
+  <svg width="960" height="600"></svg>
+  <div id="details" style="white-space: pre; margin-top: 1em;"></div>
+  <script>
+    const params = new URLSearchParams(window.location.search);
+    const session = params.get('session') || '{{ session }}';
+    fetch(`/flows/data?session=${session}`)
+      .then(res => res.json())
+      .then(data => render(data.flows));
+
+    function render(flows) {
+      const svg = d3.select('svg');
+      const width = +svg.attr('width');
+      const rowHeight = 30;
+      const times = flows.flatMap(f => [
+        f.anthropic_request.timestamp,
+        f.openai_request.timestamp,
+        f.openai_response.timestamp,
+        f.anthropic_response.timestamp
+      ]);
+      const x = d3.scaleLinear()
+        .domain(d3.extent(times))
+        .range([100, width - 50]);
+
+      flows.forEach((f, i) => {
+        const y = i * rowHeight + 50;
+        const color = d3.schemeCategory10[i % 10];
+        const seq = [
+          ['anthropic_request', f.anthropic_request.timestamp],
+          ['openai_request', f.openai_request.timestamp],
+          ['openai_response', f.openai_response.timestamp],
+          ['anthropic_response', f.anthropic_response.timestamp]
+        ];
+        svg.append('path')
+          .attr('d', d3.line()(seq.map(([k,t]) => [x(t), y])))
+          .attr('stroke', color)
+          .attr('fill', 'none')
+          .attr('class', 'flow-row')
+          .on('mouseover', () => d3.select(d3.event.target).classed('highlight', true))
+          .on('mouseout', () => d3.select(d3.event.target).classed('highlight', false));
+        seq.forEach(([k,t]) => {
+          svg.append('circle')
+            .attr('cx', x(t)).attr('cy', y)
+            .attr('r', 5).attr('fill', color).attr('class', 'flow-dot')
+            .on('mouseover', () => d3.select(d3.event.target).classed('highlight', true))
+            .on('mouseout', () => d3.select(d3.event.target).classed('highlight', false))
+            .on('click', () => {
+              const info = { request_id: f.request_id, key: k, data: f[k] };
+              const d = document.getElementById('details');
+              const text = JSON.stringify(info, null, 2);
+              d.textContent = d.textContent === text ? '' : text;
+            });
+        });
+      });
+    }
+  </script>
+</body>
+</html>

@@ -3,6 +3,7 @@
 import os
 from enum import Enum
 from pathlib import Path
+from typing import Any
 
 import platformdirs
 import tomli as tomllib
@@ -54,6 +55,17 @@ class ProxyConfig(BaseModel):
         return v.upper()
 
 
+def find_config_path(config_file: str | None = None) -> Path:
+    """Determine path to config.toml (cwd/config.toml, cwd/config.test.toml, or XDG config)."""
+    if config_file:
+        return Path(config_file)
+    cwd = Path.cwd()
+    txt = cwd / "config.toml"
+    tst = cwd / "config.test.toml"
+    xdg = Path(platformdirs.user_config_dir("claude-code-proxy")) / "config.toml"
+    return txt if txt.exists() else tst if tst.exists() else xdg
+
+
 def load_config(config_file: str | None = None) -> ProxyConfig:
     """Load configuration from file, environment variables, and defaults.
 
@@ -62,17 +74,9 @@ def load_config(config_file: str | None = None) -> ProxyConfig:
     2. Environment variables
     3. Default values
     """
-    config_data = {}
-
-    # Load from config file if it exists (cwd/config.toml or XDG config)
-    if config_file:
-        config_path = Path(config_file)
-    else:
-        cwd = Path.cwd()
-        txt = cwd / "config.toml"
-        tst = cwd / "config.test.toml"
-        xdg = Path(platformdirs.user_config_dir("claude-code-proxy")) / "config.toml"
-        config_path = txt if txt.exists() else tst if tst.exists() else xdg
+    config_data: dict[str, Any] = {}
+    # Determine config file path and load if exists
+    config_path = find_config_path(config_file)
     if config_path.exists():
         with open(config_path, "rb") as f:
             config_data = tomllib.load(f)
@@ -84,11 +88,9 @@ def load_config(config_file: str | None = None) -> ProxyConfig:
         "PROXY_PORT": "port",
         "LOG_LEVEL": "log_level",
     }
-
     for env_var, config_key in env_mapping.items():
         if env_var in os.environ and config_key not in config_data:
             value = os.environ[env_var]
-            # Convert port to int
             if config_key == "port":
                 try:
                     value = int(value)
@@ -96,7 +98,6 @@ def load_config(config_file: str | None = None) -> ProxyConfig:
                     continue
             config_data[config_key] = value
 
-    # Create and return config object
     return ProxyConfig(**config_data)
 
 

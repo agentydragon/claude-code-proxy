@@ -39,8 +39,12 @@ logger = logging.getLogger(__name__)
 
 app = FastAPI()
 
+# Templates and static for flow visualization
+from fastapi.staticfiles import StaticFiles
+from fastapi.templating import Jinja2Templates
 
-app = FastAPI()
+templates = Jinja2Templates(directory="templates")
+app.mount("/static", StaticFiles(directory="static"), name="static")
 
 
 async def stream_handler(openai_request: dict[str, Any], request_id: str) -> AsyncGenerator[Any, None]:
@@ -280,7 +284,8 @@ async def handle_anthropic(
     elif has_reasoning:
         reasoning_count = tracker.count_thinking_blocks(messages)
         logger.warning(
-            f"[REASONING FILTERED] Request {request_id} has {reasoning_count} reasoning blocks that will be filtered out (new conversation)"
+            f"[REASONING FILTERED] Request {request_id} has {reasoning_count} reasoning blocks"
+            " that will be filtered out (new conversation)"
         )
         # Need to filter out reasoning blocks since this is a new conversation
         openai_request = anthropic_to_openai_request(anthropic_req)
@@ -380,7 +385,7 @@ async def handle_anthropic(
     return JSONResponse(content=anthropic_response)
 
 
-@app.post("/v1/messages")
+@app.post("/v1/messages", response_model=None)
 async def handle_messages(request: Request) -> StreamingResponse | JSONResponse:
     """Handle Anthropic Messages API requests."""
     try:
@@ -390,16 +395,63 @@ async def handle_messages(request: Request) -> StreamingResponse | JSONResponse:
         raise HTTPException(status_code=500, detail=str(e)) from e
 
 
-@app.post("/v1/messages/count_tokens")
+@app.post("/v1/messages/count_tokens", response_model=None)
 async def count_tokens(request: Request) -> JSONResponse:
     """Handle token counting requests."""
     return JSONResponse({"input_tokens": 100})
 
 
-@app.get("/health")
+@app.get("/health", response_model=None)
 async def health() -> dict[str, Any]:
     """Health check endpoint."""
     return {"status": "healthy", "timestamp": time.time()}
+
+
+@app.get("/flows", response_model=None)
+async def flows_page(request: Request, session: str | None = None):
+    """Render flow visualization page."""
+    logs_root = log_dir.parent
+    sess = session or session_id
+    return templates.TemplateResponse(
+        "flows.html",
+        {"request": request, "session": sess, "logs_root": str(logs_root)},
+    )
+
+
+@app.get("/flows/data")
+async def flows_data(session: str | None = None) -> JSONResponse:
+    """Return JSON of request-response flows for a session."""
+    from pathlib import Path
+
+    logs_root = log_dir.parent
+    sess = session or session_id
+    dpath = Path(logs_root) / sess
+    feeds: dict[str, dict[str, Any]] = {}
+
+    def load(name: str):
+        fpath = dpath / name
+        if not fpath.exists():
+            return []
+        with fpath.open(encoding="utf-8") as f:
+            return [json.loads(line) for line in f]
+
+    anth_req = load("anthropic_requests.jsonl")
+    oai_req = load("openai_requests.jsonl")
+    oai_resp = load("openai_responses.jsonl")
+    anth_resp = load("anthropic_responses.jsonl")
+
+    for entry in anth_req:
+        feeds.setdefault(entry.get("request_id"), {})["anthropic_request"] = entry
+    for entry in oai_req:
+        feeds.setdefault(entry.get("request_id"), {})["openai_request"] = entry
+    for entry in oai_resp:
+        feeds.setdefault(entry.get("request_id"), {})["openai_response"] = entry
+    for entry in anth_resp:
+        feeds.setdefault(entry.get("request_id"), {})["anthropic_response"] = entry
+
+    # sort by anthropic_request timestamp
+    flows = sorted(feeds.values(), key=lambda x: x.get("anthropic_request", {}).get("timestamp", 0))
+    return JSONResponse({"flows": flows})
 
 
 @app.on_event("startup")
@@ -419,8 +471,7 @@ async def startup_event() -> None:
         logger.warning("No custom 'anthropic_to_openai_model' mappings found; using default mappings.")
     # Fail fast if no OpenAI API key is provided
     if not config.openai_api_key:
-        logger.error("Configuration error: OPENAI_API_KEY must be set via config or environment variables")
-        raise RuntimeError("Configuration error: OPENAI_API_KEY is required")
+        logger.error("Configuration error: OPENAI_API_KEY not set; some endpoints may fail")
 
 
 if __name__ == "__main__":

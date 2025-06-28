@@ -1,0 +1,20 @@
+{
+  "fetched_at": "2025-06-28T01:51:58.990303",
+  "files": [
+    {
+      "path": "openai-api-docs/openapi-spec.yml",
+      "url": "https://app.stainless.com/api/spec/documented/openai/openapi.documented.yml",
+      "description": "OpenAPI Specification (YAML)"
+    },
+    {
+      "path": "openai-api-docs/python-sdk-api.md",
+      "url": "https://raw.githubusercontent.com/openai/openai-python/main/api.md",
+      "description": "Python SDK API Reference"
+    },
+    {
+      "path": "openai-api-docs/python-sdk-readme.md",
+      "url": "https://raw.githubusercontent.com/openai/openai-python/main/README.md",
+      "description": "Python SDK README"
+    }
+  ]
+}

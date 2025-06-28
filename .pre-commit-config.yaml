@@ -1,11 +1,13 @@
+exclude: ^references/
 repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
-    rev: v4.5.0
+    rev: cef0300fd0fc4d2a87a85fa2093c6b283ea36f4b  # frozen: v5.0.0
     hooks:
       - id: trailing-whitespace
       - id: end-of-file-fixer
       - id: check-yaml
       - id: check-added-large-files
+        args: ["--maxkb=2000"]
       - id: check-json
       - id: check-merge-conflict
       - id: check-toml
@@ -13,25 +15,26 @@ repos:
       - id: mixed-line-ending
 
   - repo: https://github.com/psf/black
-    rev: 23.12.0
+    rev: 8a737e727ac5ab2f1d4cf5876720ed276dc8dc4b  # frozen: 25.1.0
     hooks:
       - id: black
         language_version: python3
 
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.1.9
+    rev: 7445ed19e95ffaa6aad0d9bd4123025f7039511a  # frozen: v0.12.1
     hooks:
       - id: ruff
         args: [--fix]
 
   - repo: https://github.com/asottile/pyupgrade
-    rev: main
+    rev: 37bfa06d791fd38fb4e54910b36a2ff57641b074  # frozen: v3.20.0
     hooks:
       - id: pyupgrade
         args: [--py310-plus]
 
   - repo: https://github.com/pre-commit/mirrors-mypy
-    rev: v1.8.0
+    rev: 0f86793af5ef5f6dc63c8d04a3cabfa3ea8f9c6a  # frozen: v1.16.1
     hooks:
       - id: mypy
         args: [--strict]
+        exclude: ^references/

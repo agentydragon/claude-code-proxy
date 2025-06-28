@@ -48,8 +48,8 @@ class ConversationTracker:
         is_append = False
         append_from_index = -1
 
-        # Look for longest matching prefix in index
-        for i in range(len(cleaned), 0, -1):
+        # Look for longest matching prefix shorter than full messages
+        for i in range(len(cleaned) - 1, 0, -1):
             sig = json.dumps(cleaned[:i], sort_keys=True)
             if sig in self._index:
                 conversation_id = self._index[sig]

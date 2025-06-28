@@ -31,6 +31,7 @@ dev = [
     "black>=23.0.0",
     "pre-commit>=3.4.0",
     "httpx-mock>=0.3.0",
+    "rope>=0.22.0",
 ]
 
 [project.scripts]

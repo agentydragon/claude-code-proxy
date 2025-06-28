@@ -4,6 +4,7 @@ import argparse
 
 import uvicorn
 
+from .config import find_config_path
 from .server import app, config
 
 
@@ -39,6 +40,7 @@ Examples:
 
     print(f"Starting Claude Code Proxy on http://{args.host}:{args.port}")
     print(f"Logs directory: {log_dir}")
+    print(f"Config file: {find_config_path()}")
 
     # Run with specified settings
     uvicorn.run(app, host=args.host, port=args.port, log_level=args.log_level)
