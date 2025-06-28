@@ -1,9 +1,8 @@
 """Configuration management for claude-code-proxy using Pydantic and XDG."""
 
 import os
-import sys
-from pathlib import Path
 from enum import Enum
+from pathlib import Path
 
 import platformdirs
 from dotenv import load_dotenv

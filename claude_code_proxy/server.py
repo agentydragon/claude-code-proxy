@@ -1,26 +1,26 @@
 """Claude Code Proxy Server - Direct Anthropic to OpenAI conversion."""
 
-import asyncio
-import copy
-import json
 import logging
-import time
 import uuid
-from datetime import datetime
-from pathlib import Path
 
-import httpx
-import platformdirs
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse, StreamingResponse
 
 from .config import load_config
 from .converter import anthropic_to_openai_request, openai_to_anthropic_response
+from .logging_utils import (
+    anthropic_requests_log,
+    anthropic_responses_log,
+    conversation_tracking_log,
+    log_jsonl,
+    openai_requests_log,
+    openai_responses_log,
+)
+from .streaming import stream_handler
+from .tracking import tracker
 
-# Load configuration
 config = load_config()
 
-# Configure logging
 log_level = logging._nameToLevel[config.log_level.upper()]
 logging.basicConfig(
     level=log_level,
@@ -28,102 +28,10 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-
-# Setup XDG-compliant logging directory with session subdirectory
-session_id = datetime.now().strftime("%Y%m%d_%H%M%S")
-log_dir = Path(platformdirs.user_state_dir("claude-code-proxy")) / "logs" / session_id
-log_dir.mkdir(parents=True, exist_ok=True)
-
-# Session-based log files
-anthropic_requests_log = log_dir / "anthropic_requests.jsonl"
-anthropic_responses_log = log_dir / "anthropic_responses.jsonl"
-openai_requests_log = log_dir / "openai_requests.jsonl"
-openai_responses_log = log_dir / "openai_responses.jsonl"
-conversation_tracking_log = log_dir / "conversation_tracking.jsonl"
-
-# Track conversation state to detect append opportunities
-# Store: conversation_id -> {"messages": list, "last_response": dict, "message_count": int}
-conversation_cache = {}
-
-
-def _count_thinking_blocks(messages: list) -> int:
-    """Count thinking blocks in a list of messages."""
-    return sum(
-        1
-        for msg in messages
-        for block in (msg.get("content", []) if isinstance(msg.get("content"), list) else [])
-        if isinstance(block, dict) and block.get("type") == "thinking"
-    )
-
-
-def _messages_equal_ignoring_thinking(msg1: dict, msg2: dict) -> bool:
-    """Compare two messages, ignoring thinking blocks."""
-    if msg1.get("role") != msg2.get("role"):
-        return False
-
-    # Extract non-thinking content
-    def get_non_thinking_content(msg):
-        content = msg.get("content", [])
-        if isinstance(content, str):
-            return content
-        elif isinstance(content, list):
-            filtered = []
-            for block in content:
-                if isinstance(block, dict) and block.get("type") != "thinking":
-                    filtered.append(block)
-            return filtered
-        return content
-
-    content1 = get_non_thinking_content(msg1)
-    content2 = get_non_thinking_content(msg2)
-
-    # Compare content
-    return json.dumps(content1, sort_keys=True) == json.dumps(content2, sort_keys=True)
-
-
-def log_jsonl(filepath: Path, data: dict):
-    """Write a JSON line to a file."""
-    try:
-        # Add timestamp if not already present
-        if "timestamp" not in data:
-            data["timestamp"] = time.time()
-        if "datetime" not in data:
-            data["datetime"] = datetime.now().isoformat()
-
-        with filepath.open("a", encoding="utf-8") as f:
-            json.dump(data, f, ensure_ascii=False)
-            f.write("\n")
-    except Exception as e:
-        logger.error(f"Failed to write to {filepath}: {e}")
+app = FastAPI()
 
 
 app = FastAPI()
-
-OPENAI_CLIENT = httpx.AsyncClient(headers={"Authorization": f"Bearer {config.openai_api_key}"})
-
-
-def _trunc(x):
-    T = 10000
-    x = copy.deepcopy(x)
-    if isinstance(x, dict):
-        # recurively crawl, trunc all strs to 30 chars
-        def truncate_dict(d):
-            for k, v in d.items():
-                if isinstance(v, str):
-                    d[k] = v[:20]
-                elif isinstance(v, dict):
-                    truncate_dict(v)
-                elif isinstance(v, list):
-                    for item in v:
-                        if isinstance(item, dict):
-                            truncate_dict(item)
-
-        truncate_dict(x)
-
-        x = json.dumps(x)
-    if len(x) > T:
-        return x[:T] + "..."
-    return x
 
 
 async def stream_handler(openai_request, request_id):
@@ -295,73 +203,24 @@ async def handle_anthropic(anthropic_req, request_headers=None):
         {"request_id": request_id, "headers": dict(request_headers) if request_headers else {}, "body": anthropic_req},
     )
 
-    # Check if this is an append scenario
     messages = anthropic_req.get("messages", [])
-    conversation_id = None
-    is_append = False
-    has_reasoning = False
-    append_from_index = -1
+    has_reasoning = any(
+        isinstance(block, dict) and block.get("type") == "thinking"
+        for msg in messages
+        for block in (msg.get("content", []) if isinstance(msg.get("content"), list) else [])
+    )
 
-    # Extract conversation ID from headers or generate one
-    if request_headers:
-        conversation_id = dict(request_headers).get("x-conversation-id", str(uuid.uuid4()))
-    else:
-        conversation_id = str(uuid.uuid4())
+    conversation_id = (
+        dict(request_headers).get("x-conversation-id")
+        if request_headers and "x-conversation-id" in request_headers
+        else str(uuid.uuid4())
+    )
 
-    # Check if messages contain reasoning/thinking blocks
-    for msg in messages:
-        content = msg.get("content", [])
-        if isinstance(content, list):
-            for block in content:
-                if isinstance(block, dict) and block.get("type") == "thinking":
-                    has_reasoning = True
-                    break
+    conversation_id, is_append, append_from_index = tracker.detect_append(messages, conversation_id)
 
-    # Detect if this could be an append by checking message content across all conversations
-    if len(messages) > 1:  # Only check for appends if we have multiple messages
-        # First try the same conversation ID for efficiency
-        if conversation_id in conversation_cache:
-            cached_data = conversation_cache[conversation_id]
-            cached_messages = cached_data.get("messages", [])
-
-            if len(messages) >= len(cached_messages) and len(cached_messages) > 0:
-                # Compare message content (excluding thinking blocks for comparison)
-                is_append = True
-                for i, cached_msg in enumerate(cached_messages):
-                    if not _messages_equal_ignoring_thinking(messages[i], cached_msg):
-                        is_append = False
-                        break
-
-                if is_append:
-                    append_from_index = len(cached_messages)
-
-        # If not found with same ID, check all cached conversations for matching content
-        if not is_append:
-            for cached_conv_id, cached_data in conversation_cache.items():
-                cached_messages = cached_data.get("messages", [])
-
-                if len(messages) >= len(cached_messages) and len(cached_messages) > 0:
-                    # Check if messages match
-                    matches = True
-                    for i, cached_msg in enumerate(cached_messages):
-                        if not _messages_equal_ignoring_thinking(messages[i], cached_msg):
-                            matches = False
-                            break
-
-                    if matches:
-                        is_append = True
-                        append_from_index = len(cached_messages)
-                        # Update conversation_id to the matched one for consistency
-                        logger.info(
-                            f"Detected append by content match: new ID {conversation_id} matches cached {cached_conv_id}"
-                        )
-                        conversation_id = cached_conv_id
-                        break
-
-    # Check if previous conversation had reasoning filtered
-    previous_had_reasoning_filtered = False
-    if is_append and conversation_id in conversation_cache:
-        previous_had_reasoning_filtered = conversation_cache[conversation_id].get("had_reasoning_filtered", False)
+    previous_had_reasoning_filtered = (
+        tracker.cache.get(conversation_id, {}).get("had_reasoning_filtered", False) if is_append else False
+    )
 
     # Log conversation tracking info
     action = "passthrough"
@@ -386,7 +245,7 @@ async def handle_anthropic(anthropic_req, request_headers=None):
     )
 
     if has_reasoning and is_append:
-        reasoning_count = _count_thinking_blocks(messages)
+        reasoning_count = tracker.count_thinking_blocks(messages)
         if previous_had_reasoning_filtered:
             logger.info(
                 f"[REASONING PRESERVED] Request {request_id} appending to filtered conversation - preserving {reasoning_count} reasoning blocks in new messages"
@@ -405,7 +264,7 @@ async def handle_anthropic(anthropic_req, request_headers=None):
         openai_request = anthropic_to_openai_request(anthropic_req_for_append)
         # Note: We're sending only new messages but OpenAI doesn't have explicit append API
     elif has_reasoning:
-        reasoning_count = _count_thinking_blocks(messages)
+        reasoning_count = tracker.count_thinking_blocks(messages)
         logger.warning(
             f"[REASONING FILTERED] Request {request_id} has {reasoning_count} reasoning blocks that will be filtered out (new conversation)"
         )
@@ -417,30 +276,13 @@ async def handle_anthropic(anthropic_req, request_headers=None):
     logger.debug(f"Converted to OpenAI request for {request_id}")
 
     # Update conversation cache with full message history
-    if messages:
-        # Store messages without thinking blocks for future comparison
-        messages_without_thinking = []
-        for msg in messages:
-            cleaned_msg = {"role": msg["role"]}
-            content = msg.get("content", [])
-            if isinstance(content, str):
-                cleaned_msg["content"] = content
-            elif isinstance(content, list):
-                cleaned_content = [
-                    block for block in content if not (isinstance(block, dict) and block.get("type") == "thinking")
-                ]
-                cleaned_msg["content"] = cleaned_content
-            else:
-                cleaned_msg["content"] = content
-            messages_without_thinking.append(cleaned_msg)
-
-        conversation_cache[conversation_id] = {
-            "messages": messages_without_thinking,
-            "message_count": len(messages),
-            "last_update": time.time(),
-            "had_reasoning_filtered": has_reasoning and not is_append,
-            "original_had_reasoning": has_reasoning,
-        }
+    # Update conversation cache and index
+    tracker.update(
+        conversation_id,
+        messages,
+        had_reasoning_filtered=(has_reasoning and not is_append),
+        original_had_reasoning=has_reasoning,
+    )
 
     # Log OpenAI request
     log_jsonl(
@@ -552,7 +394,7 @@ async def startup_event():
     """Log startup information and validate configuration."""
     logger.info(f"Starting Claude Code Proxy - Session ID: {session_id}")
     logger.info(f"Logs directory: {log_dir}")
-    logger.info(f"Log files:")
+    logger.info("Log files:")
     logger.info(f"  - Anthropic requests: {anthropic_requests_log}")
     logger.info(f"  - Anthropic responses: {anthropic_responses_log}")
     logger.info(f"  - OpenAI requests: {openai_requests_log}")
@@ -562,9 +404,7 @@ async def startup_event():
     # Fail fast if no model mappings are configured
     if not config.anthropic_to_openai_model:
         logger.error("Configuration error: 'anthropic_to_openai_model' must include at least one mapping")
-        raise RuntimeError(
-            "Configuration error: 'anthropic_to_openai_model' must include at least one mapping"
-        )
+        raise RuntimeError("Configuration error: 'anthropic_to_openai_model' must include at least one mapping")
     # Fail fast if no OpenAI API key is provided
     if not config.openai_api_key:
         logger.error("Configuration error: OPENAI_API_KEY must be set via config or environment variables")

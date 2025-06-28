@@ -1,11 +1,12 @@
 """Convert between Anthropic Messages API and OpenAI Responses API."""
 
+import fnmatch
 import json
 import logging
 import uuid
-import fnmatch
+from typing import Any, Optional, Union
+
 from claude_code_proxy.config import load_config
-from typing import Any, Dict, List, Optional, Union
 
 logger = logging.getLogger(__name__)
 
@@ -19,25 +20,18 @@ ANTHROPIC_TO_OPENAI_MODEL: dict[str, str] = CONFIG.anthropic_to_openai_model or 
     "claude-3-opus-20240229": "gpt-4o",
 }
 
-def _convert_tool_call_to_function_call(tc: Dict[str, Any]) -> Dict[str, Any]:
+
+def _convert_tool_call_to_function_call(tc: dict[str, Any]) -> dict[str, Any]:
     """Convert an Anthropic tool_use block to OpenAI function_call format."""
-    return {
-        "type": "function_call",
-        "name": tc["name"],
-        "arguments": json.dumps(tc["input"]),
-        "call_id": tc["id"]
-    }
+    return {"type": "function_call", "name": tc["name"], "arguments": json.dumps(tc["input"]), "call_id": tc["id"]}
 
-def _create_tool_use_block(id: str, name: str, input_data: Dict[str, Any]) -> Dict[str, Any]:
+
+def _create_tool_use_block(id: str, name: str, input_data: dict[str, Any]) -> dict[str, Any]:
     """Create an Anthropic tool_use content block."""
-    return {
-        "type": "tool_use",
-        "id": id,
-        "name": name,
-        "input": input_data
-    }
+    return {"type": "tool_use", "id": id, "name": name, "input": input_data}
 
-def parse_json_arguments(arguments: Any, context_name: str, context_type: str = "tool") -> Dict[str, Any]:
+
+def parse_json_arguments(arguments: Any, context_name: str, context_type: str = "tool") -> dict[str, Any]:
     """
     Parse JSON arguments with robust error recovery for tool/function calls.
 
@@ -63,14 +57,14 @@ def parse_json_arguments(arguments: Any, context_name: str, context_type: str = 
     except json.JSONDecodeError as e:
         logger.warning(f"Failed to parse {context_type} arguments for '{context_name}': {e}")
         logger.warning(f"Raw arguments: {arguments}")
-        
+
         # Build detailed error position
         error_pos = "unknown position"
-        if hasattr(e, 'lineno') and hasattr(e, 'colno'):
+        if hasattr(e, "lineno") and hasattr(e, "colno"):
             error_pos = f"line {e.lineno}, column {e.colno}"
-        elif hasattr(e, 'pos'):
+        elif hasattr(e, "pos"):
             error_pos = f"character {e.pos}"
-            
+
         # Return structured error that helps the model retry
         return {
             "error": f"Failed to parse JSON arguments for {context_type}",
@@ -78,10 +72,11 @@ def parse_json_arguments(arguments: Any, context_name: str, context_type: str = 
             "parse_error": str(e),
             "error_position": error_pos,
             f"{context_type}_name": context_name,
-            "instruction": f"The JSON arguments for {context_type} '{context_name}' are malformed at {str(e)}. Please retry with valid JSON. Common issues: unescaped quotes, missing commas, or incomplete brackets."
+            "instruction": f"The JSON arguments for {context_type} '{context_name}' are malformed at {str(e)}. Please retry with valid JSON. Common issues: unescaped quotes, missing commas, or incomplete brackets.",
         }
 
-def anthropic_to_openai_request(anthropic_req: Dict[str, Any]) -> Dict[str, Any]:
+
+def anthropic_to_openai_request(anthropic_req: dict[str, Any]) -> dict[str, Any]:
     """Convert Anthropic Messages API request to OpenAI Responses API format."""
     # Map Anthropic model name to OpenAI model, allowing a catch-all fallback ('*')
     anthropic_model = anthropic_req["model"]
@@ -95,9 +90,7 @@ def anthropic_to_openai_request(anthropic_req: Dict[str, Any]) -> Dict[str, Any]
     if openai_model is None:
         if fallback is not None:
             openai_model = fallback
-            logger.warning(
-                f"No mapping for Anthropic model '{anthropic_model}', using fallback '{fallback}'"
-            )
+            logger.warning(f"No mapping for Anthropic model '{anthropic_model}', using fallback '{fallback}'")
         else:
             # No custom mapping -> default to original Anthropic model name
             openai_model = anthropic_model
@@ -108,13 +101,13 @@ def anthropic_to_openai_request(anthropic_req: Dict[str, Any]) -> Dict[str, Any]
         openai_req["instructions"] = system_content
 
     # Build input array from Anthropic messages
-    input_items: List[Dict[str, Any]] = []
+    input_items: list[dict[str, Any]] = []
     for msg in anthropic_req.get("messages", []):
         # Handle messages with tool use or results
         if _contains_tool_results(msg) or _contains_tool_use(msg):
             input_items.extend(_split_tool_message(msg))
         else:
-            if (item := _convert_message_to_input(msg)):
+            if item := _convert_message_to_input(msg):
                 input_items.append(item)
             else:
                 logger.warning(f"Skipping unsupported message format: {msg}")
@@ -124,7 +117,7 @@ def anthropic_to_openai_request(anthropic_req: Dict[str, Any]) -> Dict[str, Any]
     if not input_items:
         logger.warning("No valid input items after conversion - adding minimal user prompt")
         input_items = [{"role": "user", "content": ""}]
-    
+
     openai_req["input"] = input_items
     # 2025-06-23 22:01:25,358 - INFO - Received Anthropic request for model: claude-3-5-haiku-20241022
     # 2025-06-23 22:01:25,358 - DEBUG - OpenAI request: {"model": "gpt-4o-mini", "input": [{"role": "user", "content": "quota"}], "max_output_tokens": 1, "metadata": {}, "user": "f35dc80505901d7cc45bb33b9d66a2ca896e6cc173285c043c932be151f45d59"}...
@@ -142,20 +135,20 @@ def anthropic_to_openai_request(anthropic_req: Dict[str, Any]) -> Dict[str, Any]
         openai_req["max_output_tokens"] = anthropic_req["max_tokens"]
         if openai_req["max_output_tokens"] < 16:
             openai_req["max_output_tokens"] = 16
-        
+
     if "temperature" in anthropic_req:
         openai_req["temperature"] = anthropic_req["temperature"]
-        
+
     if "top_p" in anthropic_req:
         openai_req["top_p"] = anthropic_req["top_p"]
-        
+
     if "stream" in anthropic_req:
         openai_req["stream"] = anthropic_req["stream"]
-        
+
     # Handle tools
     if "tools" in anthropic_req:
         openai_req["tools"] = _convert_tools_to_openai(anthropic_req["tools"])
-        
+
     if "tool_choice" in anthropic_req:
         openai_req["tool_choice"] = _convert_tool_choice_to_openai(anthropic_req["tool_choice"])
 
@@ -164,18 +157,19 @@ def anthropic_to_openai_request(anthropic_req: Dict[str, Any]) -> Dict[str, Any]
         openai_req["metadata"] = {}
         if "user_id" in anthropic_req["metadata"]:
             openai_req["user"] = anthropic_req["metadata"]["user_id"]
-    
+
     # Enable reasoning output for o1/o3 models and codex
     if openai_model in ["o1", "o1-mini", "o3", "o3-mini", "codex-mini-latest"]:
         # Request reasoning output from config
         openai_req["reasoning"] = {
-            "effort": CONFIG.reasoning_effort.value,    # low, medium, high
-            "summary": CONFIG.reasoning_summary.value   # auto, concise, detailed, none
+            "effort": CONFIG.reasoning_effort.value,  # low, medium, high
+            "summary": CONFIG.reasoning_summary.value,  # auto, concise, detailed, none
         }
 
     return openai_req
 
-def openai_to_anthropic_response(openai_resp: Dict[str, Any]) -> Dict[str, Any]:
+
+def openai_to_anthropic_response(openai_resp: dict[str, Any]) -> dict[str, Any]:
     """Convert OpenAI Responses API response to Anthropic Messages format."""
     # Build Anthropic response
     anthropic_resp = {
@@ -194,59 +188,46 @@ def openai_to_anthropic_response(openai_resp: Dict[str, Any]) -> Dict[str, Any]:
             # Convert assistant message content
             for content_item in item.get("content", []):
                 if content_item.get("type") == "output_text":
-                    anthropic_resp["content"].append({
-                        "type": "text",
-                        "text": content_item["text"]
-                    })
+                    anthropic_resp["content"].append({"type": "text", "text": content_item["text"]})
                 elif content_item.get("type") == "tool_call":
                     # Parse arguments with error handling
                     input_data = parse_json_arguments(
-                        content_item.get("arguments", "{}"),
-                        content_item.get("name", "unknown"),
-                        "tool"
+                        content_item.get("arguments", "{}"), content_item.get("name", "unknown"), "tool"
                     )
-                    
+
                     anthropic_resp["content"].append(
-                        _create_tool_use_block(
-                            content_item["id"],
-                            content_item["name"],
-                            input_data
-                        )
+                        _create_tool_use_block(content_item["id"], content_item["name"], input_data)
                     )
         elif item.get("type") == "function_call":
             # Handle function calls from OpenAI
-            input_data = parse_json_arguments(
-                item.get("arguments", "{}"),
-                item.get("name", "unknown"),
-                "function"
-            )
-            
+            input_data = parse_json_arguments(item.get("arguments", "{}"), item.get("name", "unknown"), "function")
+
             anthropic_resp["content"].append(
                 _create_tool_use_block(
                     item.get("call_id", item.get("id", f"toolu_{uuid.uuid4().hex[:8]}")),
                     item.get("name", ""),
-                    input_data
+                    input_data,
                 )
             )
         elif item.get("type") == "reasoning":
             # Map OpenAI reasoning to Anthropic thinking blocks
             reasoning_content = item.get("content", "")
-            logger.info(f"[REASONING BLOCK] Received from OpenAI: {reasoning_content[:200]}{'...' if len(str(reasoning_content)) > 200 else ''}")
-            anthropic_resp["content"].append({
-                "type": "thinking",
-                "text": reasoning_content
-            })
+            logger.info(
+                f"[REASONING BLOCK] Received from OpenAI: {reasoning_content[:200]}{'...' if len(str(reasoning_content)) > 200 else ''}"
+            )
+            anthropic_resp["content"].append({"type": "thinking", "text": reasoning_content})
 
     # Convert usage
     if "usage" in openai_resp:
         anthropic_resp["usage"] = {
             "input_tokens": openai_resp["usage"].get("input_tokens", 0),
-            "output_tokens": openai_resp["usage"].get("output_tokens", 0)
+            "output_tokens": openai_resp["usage"].get("output_tokens", 0),
         }
 
     return anthropic_resp
 
-def _extract_text_content( content: Union[str, List[Dict[str, Any]]]) -> str:
+
+def _extract_text_content(content: Union[str, list[dict[str, Any]]]) -> str:
     """Extract text content from various formats."""
     if isinstance(content, str):
         return content
@@ -258,19 +239,22 @@ def _extract_text_content( content: Union[str, List[Dict[str, Any]]]) -> str:
         return "\n".join(text_parts).strip()
     return ""
 
-def _contains_tool_results( msg: Dict[str, Any]) -> bool:
+
+def _contains_tool_results(msg: dict[str, Any]) -> bool:
     """Check if message contains tool results."""
     if not isinstance(msg.get("content"), list):
         return False
     return any(block.get("type") == "tool_result" for block in msg["content"])
 
-def _contains_tool_use( msg: Dict[str, Any]) -> bool:
+
+def _contains_tool_use(msg: dict[str, Any]) -> bool:
     """Check if message contains tool use."""
     if not isinstance(msg.get("content"), list):
         return False
     return any(block.get("type") == "tool_use" for block in msg["content"])
 
-def _split_tool_message( msg: Dict[str, Any]) -> List[Dict[str, Any]]:
+
+def _split_tool_message(msg: dict[str, Any]) -> list[dict[str, Any]]:
     """Split a message containing tool results into separate input items."""
     items = []
     text_parts = []
@@ -287,10 +271,12 @@ def _split_tool_message( msg: Dict[str, Any]) -> List[Dict[str, Any]]:
                 # For the Responses API, we need to handle tool calls differently
                 # They should be separate output items, not part of message content
                 if text_parts:
-                    items.append({
-                        "role": "assistant" if msg["role"] == "assistant" else "user",
-                        "content": "\n".join(text_parts)
-                    })
+                    items.append(
+                        {
+                            "role": "assistant" if msg["role"] == "assistant" else "user",
+                            "content": "\n".join(text_parts),
+                        }
+                    )
 
                 # Add tool calls as separate function_call items
                 for tc in tool_calls:
@@ -300,27 +286,27 @@ def _split_tool_message( msg: Dict[str, Any]) -> List[Dict[str, Any]]:
                 tool_calls = []
 
             # Add tool result
-            items.append({
-                "type": "function_call_output",
-                "call_id": block["tool_use_id"],
-                "output": _extract_tool_result_content(block.get("content", ""))
-            })
+            items.append(
+                {
+                    "type": "function_call_output",
+                    "call_id": block["tool_use_id"],
+                    "output": _extract_tool_result_content(block.get("content", "")),
+                }
+            )
 
     # Add any remaining content
     if text_parts or tool_calls:
         if text_parts:
-            items.append({
-                "role": msg["role"],
-                "content": "\n".join(text_parts)
-            })
-        
+            items.append({"role": msg["role"], "content": "\n".join(text_parts)})
+
         # Add remaining tool calls as separate function_call items
         for tc in tool_calls:
             items.append(_convert_tool_call_to_function_call(tc))
-    
+
     return items
 
-def _convert_message_to_input(msg: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+
+def _convert_message_to_input(msg: dict[str, Any]) -> Optional[dict[str, Any]]:
     """Convert Anthropic message to OpenAI Responses input item."""
     logger.debug(f"Converting message: {msg}")
     role = msg["role"]
@@ -351,19 +337,18 @@ def _convert_message_to_input(msg: Dict[str, Any]) -> Optional[Dict[str, Any]]:
             # Convert image to base64 URL format
             source = block.get("source", {})
             if source.get("type") == "base64":
-                output_content.append({
-                    "type": "input_image",
-                    "image": {
-                        "format": source["media_type"].split("/")[1],
-                        "source": {
-                            "type": "base64",
-                            "data": source["data"]
-                        }
+                output_content.append(
+                    {
+                        "type": "input_image",
+                        "image": {
+                            "format": source["media_type"].split("/")[1],
+                            "source": {"type": "base64", "data": source["data"]},
+                        },
                     }
-                })
+                )
 
         elif block_type == "tool_use":
-            # For the Responses API, tool uses should not be included 
+            # For the Responses API, tool uses should not be included
             # in the content array when they're part of the input
             # They need to be separate function_call items
             logger.debug(f"Skipping tool_use block in message content: {block['name']}")
@@ -372,7 +357,9 @@ def _convert_message_to_input(msg: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         elif block_type == "thinking":
             # Skip thinking blocks for now - OpenAI doesn't support reasoning in input
             thinking_text = block.get("text", "")
-            logger.info(f"[THINKING FILTERED] Removing from input: {thinking_text[:200]}{'...' if len(thinking_text) > 200 else ''}")
+            logger.info(
+                f"[THINKING FILTERED] Removing from input: {thinking_text[:200]}{'...' if len(thinking_text) > 200 else ''}"
+            )
             continue
 
         else:
@@ -384,29 +371,26 @@ def _convert_message_to_input(msg: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         # then the payload is still the simple form without a `type`
         # key.
         if not output_content:
-            return {
-                "role": role,
-                "content": "\n".join(text_parts)
-            }
+            return {"role": role, "content": "\n".join(text_parts)}
         # Mix of text and other content.  In this case we keep the
         # structured `output_content` list but we still omit the
         # super-fluous top-level `type` key.
-        output_content.insert(0, {
-            "type": "output_text" if role == "assistant" else "input_text",
-            "text": "\n".join(text_parts)
-        })
+        output_content.insert(
+            0, {"type": "output_text" if role == "assistant" else "input_text", "text": "\n".join(text_parts)}
+        )
 
     if output_content:
         return {"role": role, "content": output_content}
-    
+
     # Empty content is valid for assistant messages (e.g., tool-only responses)
     if role == "assistant" and isinstance(content, list) and len(content) == 0:
         return {"role": role, "content": []}
-    
+
     logger.warning(f"No valid content found in message: {msg}")
     return None
 
-def _extract_tool_result_content( content: Any) -> str:
+
+def _extract_tool_result_content(content: Any) -> str:
     """Extract text content from tool result."""
     if isinstance(content, str):
         return content
@@ -419,7 +403,8 @@ def _extract_tool_result_content( content: Any) -> str:
     else:
         return json.dumps(content)
 
-def _convert_tools_to_openai(tools: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+
+def _convert_tools_to_openai(tools: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """Convert Anthropic tools to OpenAI Responses API function definitions."""
     return [
         {
@@ -431,32 +416,30 @@ def _convert_tools_to_openai(tools: List[Dict[str, Any]]) -> List[Dict[str, Any]
         for tool in tools
     ]
 
-def _convert_tool_choice_to_openai( tool_choice: Dict[str, Any]) -> Union[str, Dict[str, Any]]:
+
+def _convert_tool_choice_to_openai(tool_choice: dict[str, Any]) -> Union[str, dict[str, Any]]:
     """Convert Anthropic tool_choice to OpenAI format."""
     choice_type = tool_choice.get("type")
-    
+
     if choice_type == "auto":
         return "auto"
     elif choice_type == "any":
         return "required"
     elif choice_type == "tool":
-        return {
-            "type": "function",
-            "function": {"name": tool_choice.get("name")}
-        }
+        return {"type": "function", "function": {"name": tool_choice.get("name")}}
     else:
         return "auto"
 
-def _convert_stop_reason( openai_resp: Dict[str, Any]) -> Optional[str]:
+
+def _convert_stop_reason(openai_resp: dict[str, Any]) -> Optional[str]:
     """Convert OpenAI stop reason to Anthropic format."""
     # The Responses API may have different stop reason handling
     status = openai_resp.get("status")
-    
+
     if status == "completed":
         # Check if tools were used
         has_tools = any(
-            item.get("type") == "message" and 
-            any(c.get("type") == "tool_call" for c in item.get("content", []))
+            item.get("type") == "message" and any(c.get("type") == "tool_call" for c in item.get("content", []))
             for item in openai_resp.get("output", [])
         )
         return "tool_use" if has_tools else "end_turn"
@@ -465,5 +448,5 @@ def _convert_stop_reason( openai_resp: Dict[str, Any]) -> Optional[str]:
         reason = incomplete_details.get("reason")
         if reason == "max_tokens" or reason == "max_output_tokens":
             return "max_tokens"
-    
+
     return "end_turn"
