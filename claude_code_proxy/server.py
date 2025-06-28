@@ -352,10 +352,56 @@ async def count_tokens(request: Request) -> JSONResponse:
     return JSONResponse({"input_tokens": 100})
 
 
+@app.get("/", response_model=None)  # type: ignore[misc]
+async def index(request: Request) -> TemplateResponse:
+    """Root endpoint - flow visualization landing page."""
+    logs_root = log_dir.parent
+    return templates.TemplateResponse(
+        "index.html",
+        {"request": request, "session": session_id, "logs_root": str(logs_root)}
+    )
+
+
 @app.get("/health", response_model=None)  # type: ignore[misc]
 async def health() -> dict[str, Any]:
     """Health check endpoint."""
     return {"status": "healthy", "timestamp": time.time()}
+
+
+@app.get("/data")  # type: ignore[misc]
+async def flow_data(session: str | None = None) -> JSONResponse:
+    """Return JSON of request-response flows for the current session."""
+    from pathlib import Path
+
+    logs_root = log_dir.parent
+    sess = session or session_id
+    dpath = Path(logs_root) / sess
+    feeds: dict[str, dict[str, Any]] = {}
+
+    def load(name: str) -> list[dict[str, Any]]:
+        fpath = dpath / name
+        if not fpath.exists():
+            return []
+        with fpath.open(encoding="utf-8") as f:
+            return [json.loads(line) for line in f]
+
+    anth_req = load("anthropic_requests.jsonl")
+    oai_req = load("openai_requests.jsonl")
+    oai_resp = load("openai_responses.jsonl")
+    anth_resp = load("anthropic_responses.jsonl")
+
+    for entry in anth_req:
+        feeds.setdefault(str(entry.get("request_id")), {})["anthropic_request"] = entry
+    for entry in oai_req:
+        feeds.setdefault(str(entry.get("request_id")), {})["openai_request"] = entry
+    for entry in oai_resp:
+        feeds.setdefault(str(entry.get("request_id")), {})["openai_response"] = entry
+    for entry in anth_resp:
+        feeds.setdefault(str(entry.get("request_id")), {})["anthropic_response"] = entry
+
+    # sort by anthropic_request timestamp
+    flows = sorted(feeds.values(), key=lambda x: x.get("anthropic_request", {}).get("timestamp", 0))
+    return JSONResponse({"flows": flows})
 
 
 @app.get("/flows", response_model=None)  # type: ignore[misc]
