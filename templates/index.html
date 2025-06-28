@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Claude Code Proxy - Flow Visualization</title>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
     <style>
         * {
             margin: 0;
@@ -273,6 +274,75 @@
             color: #4a5568;
             font-size: 0.9em;
         }
+        
+        /* Flow visualization styles */
+        .flow-visualization {
+            background: #151b2d;
+            border-radius: 15px;
+            padding: 30px;
+            margin-bottom: 40px;
+            box-shadow: 0 5px 20px rgba(0, 0, 0, 0.3);
+        }
+        
+        .flow-visualization h2 {
+            color: #5a7fdb;
+            margin-bottom: 20px;
+            text-align: center;
+        }
+        
+        .flow-visualization svg {
+            width: 100%;
+            background: #1e2538;
+            border-radius: 10px;
+            margin-bottom: 20px;
+        }
+        
+        .flow-row { 
+            cursor: pointer;
+            stroke-width: 2px;
+            transition: stroke-width 0.3s ease;
+        }
+        
+        .flow-dot { 
+            stroke: #000;
+            cursor: pointer;
+            transition: r 0.3s ease;
+        }
+        
+        .highlight { 
+            stroke-width: 4px !important;
+        }
+        
+        .flow-dot.highlight {
+            r: 8 !important;
+        }
+        
+        #details {
+            background: #1e2538;
+            border: 1px solid #3a4660;
+            border-radius: 10px;
+            padding: 20px;
+            font-family: 'Courier New', monospace;
+            font-size: 0.9em;
+            color: #e0e6ed;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+            max-height: 400px;
+            overflow-y: auto;
+            margin-top: 20px;
+            display: none;
+        }
+        
+        #details.show {
+            display: block;
+        }
+        
+        .session-info {
+            text-align: center;
+            color: #8892b0;
+            font-size: 0.9em;
+            margin-bottom: 10px;
+        }
     </style>
 </head>
 <body>
@@ -345,6 +415,13 @@
             </div>
         </div>
         
+        <div class="flow-visualization">
+            <h2>Request-Response Flows</h2>
+            <p class="session-info">Session: {{ session }}</p>
+            <svg width="960" height="400"></svg>
+            <div id="details"></div>
+        </div>
+        
         <div class="endpoints">
             <h2>API Endpoints</h2>
             <div class="endpoint-list">
@@ -363,16 +440,10 @@
                     <span class="endpoint-path">/health</span>
                     <span class="endpoint-desc">Health check</span>
                 </div>
-                <div class="endpoint">
-                    <span class="method">GET</span>
-                    <span class="endpoint-path">/flows</span>
-                    <span class="endpoint-desc">Request flow viewer</span>
-                </div>
             </div>
         </div>
         
         <div class="links">
-            <a href="/flows">View Request Flows</a>
             <a href="/health">Health Status</a>
         </div>
         
@@ -380,5 +451,136 @@
             <p>Claude Code Proxy - Bridging Anthropic and OpenAI APIs</p>
         </footer>
     </div>
+    
+    <script>
+        // Load flow data and render visualization
+        const params = new URLSearchParams(window.location.search);
+        const session = params.get('session') || '{{ session }}';
+        
+        fetch(`/data?session=${session}`)
+            .then(res => res.json())
+            .then(data => {
+                if (data.flows && data.flows.length > 0) {
+                    render(data.flows);
+                } else {
+                    // Hide visualization if no flows
+                    document.querySelector('.flow-visualization').style.display = 'none';
+                }
+            })
+            .catch(err => {
+                console.error('Failed to load flow data:', err);
+                document.querySelector('.flow-visualization').style.display = 'none';
+            });
+
+        function render(flows) {
+            // Validate flows data
+            flows.forEach(f => {
+                if (!f.anthropic_request || !f.anthropic_request.timestamp) 
+                    console.warn(`Missing anthropic_request timestamp for flow ${f.request_id}`);
+                if (!f.openai_request || !f.openai_request.timestamp) 
+                    console.warn(`Missing openai_request timestamp for flow ${f.request_id}`);
+                if (!f.openai_response || !f.openai_response.timestamp) 
+                    console.warn(`Missing openai_response timestamp for flow ${f.request_id}`);
+                if (!f.anthropic_response || !f.anthropic_response.timestamp) 
+                    console.warn(`Missing anthropic_response timestamp for flow ${f.request_id}`);
+            });
+            
+            const svg = d3.select('.flow-visualization svg');
+            const width = 960;
+            const height = 400;
+            const rowHeight = 30;
+            const margin = { top: 20, right: 50, bottom: 20, left: 100 };
+            
+            // Clear any existing content
+            svg.selectAll("*").remove();
+            
+            // Collect all timestamps
+            const times = flows.flatMap(f => {
+                const ts = [];
+                if (f.anthropic_request && f.anthropic_request.timestamp) 
+                    ts.push(f.anthropic_request.timestamp);
+                if (f.openai_request && f.openai_request.timestamp) 
+                    ts.push(f.openai_request.timestamp);
+                if (f.openai_response && f.openai_response.timestamp) 
+                    ts.push(f.openai_response.timestamp);
+                if (f.anthropic_response && f.anthropic_response.timestamp) 
+                    ts.push(f.anthropic_response.timestamp);
+                return ts;
+            });
+            
+            if (times.length === 0) return;
+            
+            const x = d3.scaleLinear()
+                .domain(d3.extent(times))
+                .range([margin.left, width - margin.right]);
+
+            // Add axis labels
+            const stages = ['Anthropic Request', 'OpenAI Request', 'OpenAI Response', 'Anthropic Response'];
+            const stageSpacing = 15;
+            
+            flows.forEach((f, i) => {
+                const y = i * rowHeight + margin.top + 30;
+                const color = d3.schemeCategory10[i % 10];
+                const seq = [];
+                
+                if (f.anthropic_request && f.anthropic_request.timestamp) 
+                    seq.push(['anthropic_request', f.anthropic_request.timestamp]);
+                if (f.openai_request && f.openai_request.timestamp) 
+                    seq.push(['openai_request', f.openai_request.timestamp]);
+                if (f.openai_response && f.openai_response.timestamp) 
+                    seq.push(['openai_response', f.openai_response.timestamp]);
+                if (f.anthropic_response && f.anthropic_response.timestamp) 
+                    seq.push(['anthropic_response', f.anthropic_response.timestamp]);
+                
+                // Draw connecting line
+                if (seq.length > 1) {
+                    svg.append('path')
+                        .attr('d', d3.line()(seq.map(([k,t], idx) => [x(t), y + idx * stageSpacing])))
+                        .attr('stroke', color)
+                        .attr('fill', 'none')
+                        .attr('class', 'flow-row')
+                        .on('mouseover', function() { d3.select(this).classed('highlight', true); })
+                        .on('mouseout', function() { d3.select(this).classed('highlight', false); });
+                }
+                
+                // Draw dots for each stage
+                seq.forEach(([k, t], idx) => {
+                    svg.append('circle')
+                        .attr('cx', x(t))
+                        .attr('cy', y + idx * stageSpacing)
+                        .attr('r', 5)
+                        .attr('fill', color)
+                        .attr('class', 'flow-dot')
+                        .on('mouseover', function() { d3.select(this).classed('highlight', true); })
+                        .on('mouseout', function() { d3.select(this).classed('highlight', false); })
+                        .on('click', function() {
+                            const info = { request_id: f.request_id, stage: k, data: f[k] };
+                            const details = document.getElementById('details');
+                            const text = JSON.stringify(info, null, 2);
+                            
+                            if (details.textContent === text) {
+                                details.textContent = '';
+                                details.classList.remove('show');
+                            } else {
+                                details.textContent = text;
+                                details.classList.add('show');
+                            }
+                        });
+                });
+            });
+            
+            // Add time axis
+            const xAxis = d3.axisBottom(x)
+                .tickFormat(d => {
+                    const date = new Date(d * 1000);
+                    return d3.timeFormat('%H:%M:%S')(date);
+                });
+                
+            svg.append('g')
+                .attr('transform', `translate(0, ${height - margin.bottom})`)
+                .call(xAxis)
+                .style('color', '#8892b0');
+        }
+    </script>
 </body>
 </html>
