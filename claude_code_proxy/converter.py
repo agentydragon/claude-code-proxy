@@ -38,15 +38,22 @@ def _create_tool_use_block(id: str, name: str, input_data: Dict[str, Any]) -> Di
     }
 
 def parse_json_arguments(arguments: Any, context_name: str, context_type: str = "tool") -> Dict[str, Any]:
-    """Parse JSON arguments with error handling and recovery.
-    
+    """
+    Parse JSON arguments with robust error recovery for tool/function calls.
+
+    The Anthropic API may supply arguments as raw JSON strings or dictionaries,
+    so we attempt to load strings and pass through dicts unchanged. On parse errors,
+    we emit a structured error dict that the mitigation layer can present back in
+    Anthropic format, guiding clients to correct malformed JSON in their tool definitions.
+
     Args:
-        arguments: The arguments to parse (string or dict)
-        context_name: Name of the tool/function for error messages
-        context_type: Type of context ('tool' or 'function')
-        
+        arguments: Raw arguments payload (JSON string or dict).
+        context_name: Identifier of the tool/function (for error context).
+        context_type: Either 'tool' or 'function' (affects messaging).
+
     Returns:
-        Parsed arguments dict, or error object if parsing fails
+        A dict of parsed arguments on success,
+        or a structured error object on failure.
     """
     try:
         if isinstance(arguments, str):
@@ -412,21 +419,17 @@ def _extract_tool_result_content( content: Any) -> str:
     else:
         return json.dumps(content)
 
-def _convert_tools_to_openai( tools: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-    """Convert Anthropic tools to OpenAI format."""
-    # For the Responses API, tools have a simpler structure
-    openai_tools = []
-    
-    for tool in tools:
-        openai_tool = {
+def _convert_tools_to_openai(tools: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Convert Anthropic tools to OpenAI Responses API function definitions."""
+    return [
+        {
             "type": "function",
             "name": tool["name"],
             "description": tool.get("description", ""),
-            "parameters": tool.get("input_schema", {})
+            "parameters": tool.get("input_schema", {}),
         }
-        openai_tools.append(openai_tool)
-        
-    return openai_tools
+        for tool in tools
+    ]
 
 def _convert_tool_choice_to_openai( tool_choice: Dict[str, Any]) -> Union[str, Dict[str, Any]]:
     """Convert Anthropic tool_choice to OpenAI format."""

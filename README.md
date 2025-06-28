@@ -2,7 +2,7 @@
 
 Proxy server to use Anthropic clients (e.g., Claude Code) with OpenAI models by translating Anthropic Messages API requests to OpenAI Chat Completion API format.
 
-![Claude Code Proxy Architecture Screenshot](screenshot.png)
+![CLI usage screenshot](screenshot.png)
 
 ## Features
 

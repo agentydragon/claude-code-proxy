@@ -43,7 +43,7 @@ class ProxyConfig(BaseModel):
     anthropic_to_openai_model: dict[str, str] = Field(default_factory=dict)
 
     # Server settings
-    host: str = Field("0.0.0.0", description="Host to bind to")
+    host: str = Field("127.0.0.1", description="Host to bind to")
     port: int = Field(8082, description="Port to listen on")
     log_level: str = Field("WARNING", description="Logging level: DEBUG, INFO, WARNING, ERROR")
 
