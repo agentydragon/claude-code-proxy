@@ -15,12 +15,8 @@
         </header>
 
         <div class="controls">
-            <select id="trace-selector">
-                <option value="">Select a trace...</option>
-            </select>
             <button onclick="refreshTraces()">Refresh</button>
             <button onclick="clearTraces()">Clear All</button>
-            <button onclick="exportTrace()">Export JSON</button>
             <label style="margin-left: auto;">
                 <input type="checkbox" id="auto-refresh" checked> Auto-refresh (5s)
             </label>
@@ -45,22 +41,8 @@
             </div>
         </div>
 
-        <div class="view-tabs">
-            <div class="tab active" onclick="switchView('timeline')">Timeline</div>
-            <div class="tab" onclick="switchView('events')">Events</div>
-            <div class="tab" onclick="switchView('json')">Raw JSON</div>
-        </div>
-
-        <div class="visualization-container">
-            <div id="timeline-view" class="view-content">
-                <div id="timeline"></div>
-            </div>
-            <div id="events-view" class="view-content" style="display: none;">
-                <div id="events-list"></div>
-            </div>
-            <div id="json-view" class="view-content" style="display: none;">
-                <div id="json-viewer"></div>
-            </div>
+        <div class="trace-list-container">
+            <div id="trace-list"></div>
         </div>
 
         <div class="span-details" id="span-details" style="display: none;">

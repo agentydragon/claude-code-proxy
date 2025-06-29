@@ -1,8 +1,8 @@
 // Claude Code Proxy - Telemetry Viewer JavaScript
 
-let currentTrace = null;
-let currentView = 'timeline';
 let autoRefreshInterval = null;
+let allTraces = {};
+let selectedTraceId = null;
 
 // Initialize
 document.addEventListener('DOMContentLoaded', () => {
@@ -17,7 +17,7 @@ function setupAutoRefresh() {
     } else {
         clearInterval(autoRefreshInterval);
     }
-    
+
     checkbox.addEventListener('change', () => {
         if (checkbox.checked) {
             autoRefreshInterval = setInterval(refreshTraces, 5000);
@@ -31,15 +31,10 @@ async function refreshTraces() {
     try {
         const response = await fetch('/telemetry/traces');
         const data = await response.json();
-        
+
         updateStats(data.stats);
-        updateTraceSelector(data.traces);
-        
-        // If a trace is selected, refresh it
-        const selector = document.getElementById('trace-selector');
-        if (selector.value) {
-            loadTrace(selector.value);
-        }
+        allTraces = data.traces;
+        renderTraceList(data.traces);
     } catch (error) {
         console.error('Failed to refresh traces:', error);
     }
@@ -48,330 +43,286 @@ async function refreshTraces() {
 function updateStats(stats) {
     document.getElementById('total-traces').textContent = stats.total_traces;
     document.getElementById('total-spans').textContent = stats.total_spans;
-    document.getElementById('avg-duration').textContent = stats.avg_duration.toFixed(2) + 'ms';
-    document.getElementById('error-rate').textContent = stats.error_rate.toFixed(1) + '%';
+    document.getElementById('avg-duration').textContent = Math.round(stats.avg_duration) + 'ms';
+    document.getElementById('error-rate').textContent = Math.round(stats.error_rate) + '%';
 }
 
-function updateTraceSelector(traces) {
-    const selector = document.getElementById('trace-selector');
-    const currentValue = selector.value;
-    
-    selector.innerHTML = '<option value="">Select a trace...</option>';
-    
-    Object.entries(traces).forEach(([traceId, spans]) => {
-        const option = document.createElement('option');
-        option.value = traceId;
-        
+function renderTraceList(traces) {
+    const container = document.getElementById('trace-list');
+    container.innerHTML = '';
+
+    // Convert traces object to array and sort by start time (newest first)
+    const traceArray = Object.entries(traces).map(([traceId, spans]) => {
         const rootSpan = spans.find(s => !s.parent_span_id) || spans[0];
-        const timestamp = new Date(rootSpan.start_time * 1000).toLocaleString();
-        const duration = rootSpan.duration_ms ? `${rootSpan.duration_ms.toFixed(2)}ms` : 'ongoing';
-        
-        option.textContent = `${rootSpan.name} - ${timestamp} (${duration})`;
-        
-        if (traceId === currentValue) {
-            option.selected = true;
+        return { traceId, spans, rootSpan };
+    }).sort((a, b) => b.rootSpan.start_time - a.rootSpan.start_time);
+
+    traceArray.forEach(({ traceId, spans, rootSpan }) => {
+        const traceDiv = document.createElement('div');
+        traceDiv.className = 'trace-item';
+        traceDiv.dataset.traceId = traceId;
+
+        const isSelected = selectedTraceId === traceId;
+        traceDiv.style.cssText = `
+            padding: 12px;
+            margin-bottom: 8px;
+            background: ${isSelected ? '#1e3a5f' : '#1a1d24'};
+            border-radius: 6px;
+            cursor: pointer;
+            transition: background 0.2s, border-color 0.2s;
+            border: 2px solid ${isSelected ? '#60a5fa' : '#2a2d35'};
+        `;
+
+        // Determine status
+        let status = 'OK';
+        let statusColor = '#4ade80';
+
+        if (!rootSpan.end_time) {
+            status = 'ONGOING';
+            statusColor = '#fbbf24';
+        } else if (rootSpan.status_code === 'ERROR') {
+            status = 'ERROR';
+            statusColor = '#ef4444';
+        } else if (rootSpan.duration_ms > 30000) {
+            status = 'TIMEOUT';
+            statusColor = '#ef4444';
         }
-        
-        selector.appendChild(option);
-    });
-}
 
-function loadTrace(traceId) {
-    if (!traceId) {
-        currentTrace = null;
-        clearVisualization();
-        return;
-    }
-    
-    fetch(`/telemetry/trace/${traceId}`)
-        .then(response => response.json())
-        .then(trace => {
-            currentTrace = trace;
-            renderCurrentView();
-        })
-        .catch(error => console.error('Failed to load trace:', error));
-}
+        // Extract prompt and response from events
+        let promptText = 'No prompt found';
+        let responseText = 'No response found';
 
-function switchView(view) {
-    currentView = view;
-    
-    // Update tabs
-    document.querySelectorAll('.tab').forEach(tab => {
-        tab.classList.remove('active');
-    });
-    event.target.classList.add('active');
-    
-    // Hide all views
-    document.querySelectorAll('.view-content').forEach(content => {
-        content.style.display = 'none';
-    });
-    
-    // Show selected view
-    document.getElementById(`${view}-view`).style.display = 'block';
-    
-    renderCurrentView();
-}
-
-function renderCurrentView() {
-    if (!currentTrace) return;
-    
-    switch (currentView) {
-        case 'timeline':
-            renderTimeline();
-            break;
-        case 'events':
-            renderEvents();
-            break;
-        case 'json':
-            renderJSON();
-            break;
-    }
-}
-
-function renderTimeline() {
-    const container = document.getElementById('timeline');
-    container.innerHTML = '';
-    
-    if (!currentTrace || currentTrace.length === 0) return;
-    
-    const margin = {top: 20, right: 20, bottom: 30, left: 200};
-    const width = container.clientWidth - margin.left - margin.right;
-    const height = Math.max(400, currentTrace.length * 40);
-    
-    const svg = d3.select(container)
-        .append('svg')
-        .attr('width', width + margin.left + margin.right)
-        .attr('height', height + margin.top + margin.bottom);
-    
-    const g = svg.append('g')
-        .attr('transform', `translate(${margin.left},${margin.top})`);
-    
-    // Calculate time bounds
-    const minTime = d3.min(currentTrace, d => d.start_time);
-    const maxTime = d3.max(currentTrace, d => d.end_time || d.start_time);
-    
-    const xScale = d3.scaleLinear()
-        .domain([minTime, maxTime])
-        .range([0, width]);
-    
-    const yScale = d3.scaleBand()
-        .domain(currentTrace.map(d => d.span_id))
-        .range([0, height])
-        .padding(0.1);
-    
-    // Add x axis
-    g.append('g')
-        .attr('transform', `translate(0,${height})`)
-        .call(d3.axisBottom(xScale)
-            .tickFormat(d => `${((d - minTime) * 1000).toFixed(1)}ms`))
-        .style('color', '#8892b0');
-    
-    // Create tooltip
-    const tooltip = d3.select('body').append('div')
-        .attr('class', 'timeline-tooltip')
-        .style('opacity', 0);
-    
-    // Draw spans
-    const spans = g.selectAll('.span')
-        .data(currentTrace)
-        .enter().append('g')
-        .attr('class', 'span');
-    
-    spans.append('rect')
-        .attr('x', d => xScale(d.start_time))
-        .attr('y', d => yScale(d.span_id))
-        .attr('width', d => {
-            const endTime = d.end_time || maxTime;
-            return Math.max(1, xScale(endTime) - xScale(d.start_time));
-        })
-        .attr('height', yScale.bandwidth())
-        .attr('fill', d => d.status_code === 'ERROR' ? '#ff5555' : '#5a7fdb')
-        .attr('opacity', 0.8)
-        .on('mouseover', function(event, d) {
-            tooltip.transition().duration(200).style('opacity', .9);
-            tooltip.html(formatSpanTooltip(d))
-                .style('left', (event.pageX + 10) + 'px')
-                .style('top', (event.pageY - 28) + 'px');
-        })
-        .on('mouseout', function() {
-            tooltip.transition().duration(500).style('opacity', 0);
-        })
-        .on('click', function(event, d) {
-            showSpanDetails(d);
-        });
-    
-    // Add span names
-    spans.append('text')
-        .attr('x', -5)
-        .attr('y', d => yScale(d.span_id) + yScale.bandwidth() / 2)
-        .attr('dy', '.35em')
-        .attr('text-anchor', 'end')
-        .text(d => d.name)
-        .style('fill', '#e0e6ed')
-        .style('font-size', '12px');
-    
-    // Add events as vertical lines
-    currentTrace.forEach(span => {
-        if (span.events && span.events.length > 0) {
-            const eventLines = g.selectAll(`.event-${span.span_id}`)
-                .data(span.events)
-                .enter().append('line')
-                .attr('x1', d => xScale(d.timestamp))
-                .attr('y1', yScale(span.span_id))
-                .attr('x2', d => xScale(d.timestamp))
-                .attr('y2', yScale(span.span_id) + yScale.bandwidth())
-                .attr('stroke', '#ff79c6')
-                .attr('stroke-width', 2)
-                .attr('stroke-dasharray', '2,2');
-        }
-    });
-}
-
-
-function renderEvents() {
-    const container = document.getElementById('events-list');
-    container.innerHTML = '';
-    
-    if (!currentTrace) return;
-    
-    // Collect all events from all spans
-    const allEvents = [];
-    currentTrace.forEach(span => {
-        if (span.events) {
-            span.events.forEach(event => {
-                allEvents.push({
-                    ...event,
-                    span_id: span.span_id,
-                    span_name: span.name
-                });
-            });
-        }
-    });
-    
-    // Sort by timestamp
-    allEvents.sort((a, b) => a.timestamp - b.timestamp);
-    
-    allEvents.forEach(event => {
-        const eventDiv = document.createElement('div');
-        eventDiv.className = 'event-item';
-        
-        const headerDiv = document.createElement('div');
-        headerDiv.className = 'event-header';
-        
-        const nameSpan = document.createElement('span');
-        nameSpan.className = 'event-name';
-        nameSpan.textContent = event.name;
-        
-        const timeSpan = document.createElement('span');
-        timeSpan.className = 'event-time';
-        timeSpan.textContent = new Date(event.timestamp * 1000).toLocaleTimeString();
-        
-        headerDiv.appendChild(nameSpan);
-        headerDiv.appendChild(timeSpan);
-        eventDiv.appendChild(headerDiv);
-        
-        // Add span info
-        const spanInfo = document.createElement('div');
-        spanInfo.style.color = '#8892b0';
-        spanInfo.style.fontSize = '0.85em';
-        spanInfo.textContent = `From span: ${event.span_name}`;
-        eventDiv.appendChild(spanInfo);
-        
-        // Add attributes
-        if (event.attributes && Object.keys(event.attributes).length > 0) {
-            const attrDiv = document.createElement('div');
-            attrDiv.style.marginTop = '10px';
-            
-            // Special handling for streaming chunks
-            if (event.name === 'streaming_chunk_received') {
-                const chunkIndex = event.attributes['proxy.streaming.chunk_index'];
-                const chunkData = event.attributes['proxy.streaming.chunk_data'];
-                
-                // Show chunk index
-                const indexTag = document.createElement('span');
-                indexTag.className = 'attribute-tag';
-                indexTag.textContent = `Chunk #${chunkIndex}`;
-                attrDiv.appendChild(indexTag);
-                
-                // Parse and show chunk data
-                if (chunkData) {
-                    const dataDiv = document.createElement('div');
-                    dataDiv.style.marginTop = '5px';
-                    dataDiv.style.padding = '8px';
-                    dataDiv.style.backgroundColor = '#0d1117';
-                    dataDiv.style.borderRadius = '4px';
-                    dataDiv.style.fontFamily = 'monospace';
-                    dataDiv.style.fontSize = '11px';
-                    dataDiv.style.maxHeight = '100px';
-                    dataDiv.style.overflowY = 'auto';
-                    
+        // Look for events in the root span only
+        if (rootSpan.events) {
+            rootSpan.events.forEach(event => {
+                if (event.name === 'anthropic_request' && event.attributes['proxy.anthropic_request.body']) {
                     try {
-                        if (chunkData.startsWith('data: ')) {
-                            const jsonStr = chunkData.substring(6);
-                            const parsed = JSON.parse(jsonStr);
-                            dataDiv.innerHTML = syntaxHighlightJSON(JSON.stringify(parsed, null, 2));
-                        } else {
-                            dataDiv.textContent = chunkData;
+                        const body = JSON.parse(event.attributes['proxy.anthropic_request.body']);
+                        if (body.messages && body.messages.length > 0) {
+                            const lastMessage = body.messages[body.messages.length - 1];
+                            if (lastMessage.content) {
+                                const content = typeof lastMessage.content === 'string'
+                                    ? lastMessage.content
+                                    : lastMessage.content.map(c => c.text || '').join(' ');
+                                promptText = content.substring(0, 100) + (content.length > 100 ? '...' : '');
+                            }
                         }
                     } catch (e) {
-                        dataDiv.textContent = chunkData;
+                        console.error('Failed to parse request body:', e);
                     }
-                    
-                    attrDiv.appendChild(dataDiv);
                 }
-            } else {
-                // Regular attributes - use better formatting for long values
-                attrDiv.className = 'attribute-section';
-                
-                Object.entries(event.attributes).forEach(([key, value]) => {
-                    const itemDiv = document.createElement('div');
-                    itemDiv.className = 'attribute-item';
-                    
-                    const keyDiv = document.createElement('div');
-                    keyDiv.className = 'attribute-key';
-                    keyDiv.textContent = key;
-                    itemDiv.appendChild(keyDiv);
-                    
-                    const valueDiv = document.createElement('div');
-                    valueDiv.className = 'attribute-value';
-                    
-                    // Format value based on type
-                    if (typeof value === 'object' && value !== null) {
-                        valueDiv.innerHTML = syntaxHighlightJSON(JSON.stringify(value, null, 2));
-                    } else if (typeof value === 'string' && value.length > 100) {
-                        // For long strings, make them more readable
-                        valueDiv.textContent = value;
-                    } else {
-                        valueDiv.textContent = JSON.stringify(value);
+
+                if (event.name === 'anthropic_response' && event.attributes['proxy.anthropic_response.body']) {
+                    try {
+                        const body = JSON.parse(event.attributes['proxy.anthropic_response.body']);
+                        if (body.content && body.content.length > 0) {
+                            const textContent = body.content
+                                .filter(c => c.type === 'text')
+                                .map(c => c.text)
+                                .join(' ');
+                            if (textContent) {
+                                responseText = textContent.substring(0, 100) + (textContent.length > 100 ? '...' : '');
+                            }
+                        }
+                    } catch (e) {
+                        console.error('Failed to parse response body:', e);
                     }
-                    
-                    itemDiv.appendChild(valueDiv);
-                    attrDiv.appendChild(itemDiv);
-                });
-            }
-            
-            eventDiv.appendChild(attrDiv);
+                }
+            });
         }
-        
-        eventDiv.onclick = () => {
-            const span = currentTrace.find(s => s.span_id === event.span_id);
-            if (span) showSpanDetails(span);
+
+        const timestamp = new Date(rootSpan.start_time * 1000).toLocaleTimeString();
+        const duration = rootSpan.duration_ms ? `${Math.round(rootSpan.duration_ms)}ms` : '...';
+
+        const promptClass = promptText === 'No prompt found' ? 'style="color: #6b7280;"' : 'style="color: #e5e7eb;"';
+        const responseClass = responseText === 'No response found' ? 'style="color: #6b7280;"' : 'style="color: #e5e7eb;"';
+
+        // Store request/response data on the div for easy access
+        traceDiv.requestData = null;
+        traceDiv.responseData = null;
+
+        // Extract and store full request/response data
+        if (rootSpan.events) {
+            rootSpan.events.forEach(event => {
+                if (event.name === 'anthropic_request' && event.attributes['proxy.anthropic_request.body']) {
+                    try {
+                        traceDiv.requestData = JSON.parse(event.attributes['proxy.anthropic_request.body']);
+                    } catch (e) {}
+                }
+                if (event.name === 'anthropic_response' && event.attributes['proxy.anthropic_response.body']) {
+                    try {
+                        traceDiv.responseData = JSON.parse(event.attributes['proxy.anthropic_response.body']);
+                    } catch (e) {}
+                }
+            });
+        }
+
+        traceDiv.innerHTML = `
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+                <div style="display: flex; gap: 12px; align-items: center;">
+                    <span style="color: ${statusColor}; font-weight: 600; min-width: 65px;">${status}</span>
+                    <span style="color: #9ca3af;">${timestamp}</span>
+                    <span style="color: #60a5fa;">${duration}</span>
+                </div>
+                <div style="display: flex; gap: 8px; align-items: center;">
+                    ${traceDiv.requestData ? '<button class="json-btn" data-type="request" style="background: #1e3a5f; border: 1px solid #60a5fa; color: #60a5fa; padding: 2px 8px; border-radius: 4px; font-size: 0.8em; cursor: pointer;">Request JSON</button>' : ''}
+                    ${traceDiv.responseData ? '<button class="json-btn" data-type="response" style="background: #1e3a5f; border: 1px solid #34d399; color: #34d399; padding: 2px 8px; border-radius: 4px; font-size: 0.8em; cursor: pointer;">Response JSON</button>' : ''}
+                    <span style="color: #6b7280; font-size: 0.85em;">${traceId.substring(0, 8)}</span>
+                </div>
+            </div>
+            <div style="margin-top: 8px; display: flex; gap: 20px; font-size: 0.95em;">
+                <div style="flex: 1;">
+                    <strong style="color: #a78bfa;">Prompt:</strong>
+                    <span ${promptClass}>${escapeHtml(promptText)}</span>
+                </div>
+                <div style="flex: 1;">
+                    <strong style="color: #34d399;">Response:</strong>
+                    <span ${responseClass}>${escapeHtml(responseText)}</span>
+                </div>
+            </div>
+        `;
+
+        traceDiv.onmouseover = () => {
+            if (selectedTraceId !== traceId) {
+                traceDiv.style.background = '#22252d';
+            }
         };
-        
-        container.appendChild(eventDiv);
+
+        traceDiv.onmouseout = () => {
+            if (selectedTraceId !== traceId) {
+                traceDiv.style.background = '#1a1d24';
+            }
+        };
+
+        traceDiv.onclick = () => {
+            // Update selection
+            selectedTraceId = traceId;
+
+            // Update all trace items to reflect new selection
+            document.querySelectorAll('.trace-item').forEach(item => {
+                const itemId = item.dataset.traceId;
+                const isItemSelected = itemId === selectedTraceId;
+                item.style.background = isItemSelected ? '#1e3a5f' : '#1a1d24';
+                item.style.borderColor = isItemSelected ? '#60a5fa' : '#2a2d35';
+            });
+
+            showTraceDetails(traceId, spans);
+        };
+
+        container.appendChild(traceDiv);
     });
 }
 
-function renderJSON() {
-    const container = document.getElementById('json-viewer');
-    container.innerHTML = '';
-    
-    if (!currentTrace) return;
-    
-    const pre = document.createElement('pre');
-    pre.innerHTML = syntaxHighlightJSON(JSON.stringify(currentTrace, null, 2));
-    container.appendChild(pre);
+function escapeHtml(text) {
+    const map = {
+        '&': '&amp;',
+        '<': '&lt;',
+        '>': '&gt;',
+        '"': '&quot;',
+        "'": '&#039;'
+    };
+    return text.replace(/[&<>"']/g, m => map[m]);
 }
+
+function showTraceDetails(traceId, spans) {
+    const details = document.getElementById('span-details');
+    const content = document.getElementById('details-content');
+
+    content.innerHTML = '';
+
+    // Find root span
+    const rootSpan = spans.find(s => !s.parent_span_id) || spans[0];
+
+    // Add trace info
+    const traceHeader = document.createElement('h4');
+    traceHeader.textContent = 'Trace Information';
+    traceHeader.style.color = '#e0e6ed';
+    traceHeader.style.marginBottom = '15px';
+    content.appendChild(traceHeader);
+
+    addDetailRow('Trace ID', traceId);
+    addDetailRow('Start Time', new Date(rootSpan.start_time * 1000).toLocaleString());
+    if (rootSpan.end_time) {
+        addDetailRow('End Time', new Date(rootSpan.end_time * 1000).toLocaleString());
+    }
+    if (rootSpan.duration_ms) {
+        addDetailRow('Total Duration', Math.round(rootSpan.duration_ms) + ' ms');
+    }
+    addDetailRow('Status', rootSpan.status_code || 'OK');
+    addDetailRow('Total Spans', spans.length.toString());
+
+    // Add timeline of spans
+    const timelineHeader = document.createElement('h4');
+    timelineHeader.textContent = 'Span Timeline';
+    timelineHeader.style.color = '#e0e6ed';
+    timelineHeader.style.marginTop = '20px';
+    timelineHeader.style.marginBottom = '15px';
+    content.appendChild(timelineHeader);
+
+    // Sort spans by start time
+    const sortedSpans = [...spans].sort((a, b) => a.start_time - b.start_time);
+
+    sortedSpans.forEach(span => {
+        const spanDiv = document.createElement('div');
+        spanDiv.style.cssText = `
+            padding: 10px;
+            margin-bottom: 10px;
+            background: #0d1117;
+            border-radius: 4px;
+            border-left: 3px solid ${span.status_code === 'ERROR' ? '#ff5555' : '#5a7fdb'};
+        `;
+
+        const spanHeader = document.createElement('div');
+        spanHeader.style.cssText = 'display: flex; justify-content: space-between; margin-bottom: 5px;';
+        spanHeader.innerHTML = `
+            <strong style="color: #64b5f6;">${span.name}</strong>
+            <span style="color: #8892b0;">${span.duration_ms ? Math.round(span.duration_ms) + 'ms' : 'ongoing'}</span>
+        `;
+        spanDiv.appendChild(spanHeader);
+
+        // Add key events for this span
+        if (span.events && span.events.length > 0) {
+            const eventList = document.createElement('div');
+            eventList.style.cssText = 'margin-top: 5px; font-size: 0.9em;';
+
+            span.events.forEach(event => {
+                if (['anthropic_request', 'openai_request', 'anthropic_response', 'openai_response'].includes(event.name)) {
+                    const eventItem = document.createElement('div');
+                    eventItem.style.cssText = 'color: #8892b0; margin-top: 2px;';
+                    eventItem.textContent = `• ${event.name}`;
+                    eventList.appendChild(eventItem);
+                }
+            });
+
+            spanDiv.appendChild(eventList);
+        }
+
+        spanDiv.onclick = () => showSpanDetails(span);
+        spanDiv.style.cursor = 'pointer';
+
+        content.appendChild(spanDiv);
+    });
+
+    details.style.display = 'block';
+
+    function addDetailRow(label, value) {
+        const row = document.createElement('div');
+        row.className = 'detail-row';
+
+        const labelDiv = document.createElement('div');
+        labelDiv.className = 'detail-label';
+        labelDiv.textContent = label;
+
+        const valueDiv = document.createElement('div');
+        valueDiv.className = 'detail-value';
+        valueDiv.textContent = value;
+
+        row.appendChild(labelDiv);
+        row.appendChild(valueDiv);
+        content.appendChild(row);
+    }
+}
+
 
 function syntaxHighlightJSON(json) {
     return json.replace(/("(\\u[a-zA-Z0-9]{4}|\\[^u]|[^\\"])*"(\s*:)?|\b(true|false|null)\b|-?\d+(?:\.\d*)?(?:[eE][+\-]?\d+)?)/g, function (match) {
@@ -393,26 +344,26 @@ function syntaxHighlightJSON(json) {
 
 function formatSpanTooltip(span) {
     let html = `<strong>${span.name}</strong><br>`;
-    html += `Duration: ${span.duration_ms ? span.duration_ms.toFixed(2) + 'ms' : 'ongoing'}<br>`;
+    html += `Duration: ${span.duration_ms ? Math.round(span.duration_ms) + 'ms' : 'ongoing'}<br>`;
     html += `Status: ${span.status_code}<br>`;
-    
+
     if (span.attributes.proxy_request_id) {
         html += `Request ID: ${span.attributes.proxy_request_id}<br>`;
     }
-    
+
     if (span.events && span.events.length > 0) {
         html += `Events: ${span.events.length}<br>`;
     }
-    
+
     return html;
 }
 
 function showSpanDetails(span) {
     const details = document.getElementById('span-details');
     const content = document.getElementById('details-content');
-    
+
     content.innerHTML = '';
-    
+
     // Basic info
     addDetailRow('Span ID', span.span_id);
     addDetailRow('Trace ID', span.trace_id);
@@ -422,35 +373,35 @@ function showSpanDetails(span) {
         addDetailRow('End Time', new Date(span.end_time * 1000).toLocaleString());
     }
     if (span.duration_ms) {
-        addDetailRow('Duration', span.duration_ms.toFixed(2) + ' ms');
+        addDetailRow('Duration', Math.round(span.duration_ms) + ' ms');
     }
     addDetailRow('Status', span.status_code);
     if (span.status_message) {
         addDetailRow('Status Message', span.status_message);
     }
-    
+
     // Attributes
     if (span.attributes && Object.keys(span.attributes).length > 0) {
         const attrHeader = document.createElement('div');
         attrHeader.className = 'detail-row';
         attrHeader.innerHTML = '<div class="detail-label">Attributes</div><div class="detail-value"></div>';
         content.appendChild(attrHeader);
-        
+
         const attrSection = document.createElement('div');
         attrSection.className = 'attribute-section';
-        
+
         Object.entries(span.attributes).forEach(([key, value]) => {
             const itemDiv = document.createElement('div');
             itemDiv.className = 'attribute-item';
-            
+
             const keyDiv = document.createElement('div');
             keyDiv.className = 'attribute-key';
             keyDiv.textContent = key;
             itemDiv.appendChild(keyDiv);
-            
+
             const valueDiv = document.createElement('div');
             valueDiv.className = 'attribute-value';
-            
+
             // Format value based on type
             if (typeof value === 'object' && value !== null) {
                 valueDiv.innerHTML = syntaxHighlightJSON(JSON.stringify(value, null, 2));
@@ -459,122 +410,209 @@ function showSpanDetails(span) {
             } else {
                 valueDiv.textContent = JSON.stringify(value);
             }
-            
+
             itemDiv.appendChild(valueDiv);
             attrSection.appendChild(itemDiv);
         });
-        
+
         content.appendChild(attrSection);
     }
-    
+
     // Events
     if (span.events && span.events.length > 0) {
-        addDetailRow('Events', '');
-        
-        // Check if this span has streaming chunks
-        const streamingChunks = span.events.filter(e => e.name === 'streaming_chunk_received');
-        
-        if (streamingChunks.length > 0) {
-            // Create a special streaming view
-            const streamingSection = document.createElement('div');
-            streamingSection.className = 'streaming-section';
-            streamingSection.style.marginTop = '20px';
-            
-            const streamingHeader = document.createElement('h4');
-            streamingHeader.textContent = `Streaming Chunks (${streamingChunks.length})`;
-            streamingHeader.style.color = '#ff79c6';
-            streamingSection.appendChild(streamingHeader);
-            
-            // Create chunks container
-            const chunksContainer = document.createElement('div');
-            chunksContainer.className = 'streaming-chunks';
-            chunksContainer.style.maxHeight = '400px';
-            chunksContainer.style.overflowY = 'auto';
-            chunksContainer.style.backgroundColor = '#0d1117';
-            chunksContainer.style.padding = '10px';
-            chunksContainer.style.borderRadius = '6px';
-            chunksContainer.style.fontFamily = 'monospace';
-            chunksContainer.style.fontSize = '12px';
-            
-            streamingChunks.forEach((chunk, index) => {
-                const chunkDiv = document.createElement('div');
-                chunkDiv.style.marginBottom = '10px';
-                chunkDiv.style.borderBottom = '1px solid #30363d';
-                chunkDiv.style.paddingBottom = '10px';
-                
-                // Chunk header
-                const chunkHeader = document.createElement('div');
-                chunkHeader.style.color = '#8b949e';
-                chunkHeader.style.marginBottom = '5px';
-                chunkHeader.textContent = `Chunk ${chunk.attributes['proxy.streaming.chunk_index']} - ${new Date(chunk.timestamp * 1000).toLocaleTimeString()}`;
-                chunkDiv.appendChild(chunkHeader);
-                
-                // Parse and display chunk data
-                const chunkData = chunk.attributes['proxy.streaming.chunk_data'];
-                if (chunkData) {
-                    try {
-                        // Try to parse as SSE data
-                        if (chunkData.startsWith('data: ')) {
-                            const jsonStr = chunkData.substring(6);
-                            const parsed = JSON.parse(jsonStr);
-                            
-                            const chunkContent = document.createElement('pre');
-                            chunkContent.style.margin = '0';
-                            chunkContent.style.color = '#e6edf3';
-                            chunkContent.innerHTML = syntaxHighlightJSON(JSON.stringify(parsed, null, 2));
-                            chunkDiv.appendChild(chunkContent);
-                        } else {
-                            // Display raw data
-                            const chunkContent = document.createElement('div');
-                            chunkContent.style.color = '#e6edf3';
-                            chunkContent.textContent = chunkData;
-                            chunkDiv.appendChild(chunkContent);
-                        }
-                    } catch (e) {
-                        // If parsing fails, show raw data
-                        const chunkContent = document.createElement('div');
-                        chunkContent.style.color = '#e6edf3';
-                        chunkContent.textContent = chunkData;
-                        chunkDiv.appendChild(chunkContent);
-                    }
-                }
-                
-                chunksContainer.appendChild(chunkDiv);
-            });
-            
-            streamingSection.appendChild(chunksContainer);
-            content.appendChild(streamingSection);
-            
-            // Show other events separately
-            const otherEvents = span.events.filter(e => e.name !== 'streaming_chunk_received');
-            if (otherEvents.length > 0) {
-                addDetailRow('Other Events', '');
-                otherEvents.forEach(event => {
-                    addDetailRow(`  ${event.name}`, new Date(event.timestamp * 1000).toLocaleTimeString());
-                });
+        const eventsHeader = document.createElement('h4');
+        eventsHeader.textContent = 'Events';
+        eventsHeader.style.color = '#e0e6ed';
+        eventsHeader.style.marginTop = '20px';
+        eventsHeader.style.marginBottom = '10px';
+        content.appendChild(eventsHeader);
+
+        // Group events by type
+        const eventGroups = {};
+        span.events.forEach(event => {
+            if (!eventGroups[event.name]) {
+                eventGroups[event.name] = [];
             }
-        } else {
-            // Regular events display
-            span.events.forEach(event => {
-                addDetailRow(`  ${event.name}`, new Date(event.timestamp * 1000).toLocaleTimeString());
-            });
-        }
+            eventGroups[event.name].push(event);
+        });
+
+        Object.entries(eventGroups).forEach(([eventName, events]) => {
+            const eventRow = document.createElement('div');
+            eventRow.style.cssText = `
+                padding: 8px;
+                margin-bottom: 5px;
+                background: #0d1117;
+                border-radius: 4px;
+                cursor: pointer;
+                transition: background 0.2s;
+                user-select: none;
+            `;
+
+            // Add hover effect
+            eventRow.onmouseenter = () => {
+                if (!eventRow.dataset.expanded || eventRow.dataset.expanded === 'false') {
+                    eventRow.style.background = '#161b22';
+                }
+            };
+            eventRow.onmouseleave = () => {
+                if (!eventRow.dataset.expanded || eventRow.dataset.expanded === 'false') {
+                    eventRow.style.background = '#0d1117';
+                }
+            };
+
+            const eventContent = document.createElement('div');
+            eventContent.style.cssText = 'display: flex; justify-content: space-between; align-items: center;';
+
+            const eventLabel = document.createElement('span');
+            eventLabel.style.color = '#64b5f6';
+
+            // Add expand indicator for expandable events
+            const hasDetails = ['anthropic_request', 'openai_request', 'anthropic_response', 'openai_response', 'exception'].includes(eventName);
+            if (hasDetails) {
+                const arrow = document.createElement('span');
+                arrow.style.cssText = 'display: inline-block; margin-right: 8px; transition: transform 0.2s;';
+                arrow.textContent = '▶';
+                arrow.className = 'expand-arrow';
+                eventLabel.appendChild(arrow);
+            }
+
+            const nameSpan = document.createElement('span');
+            nameSpan.textContent = eventName;
+            eventLabel.appendChild(nameSpan);
+
+            const eventCount = document.createElement('span');
+            eventCount.style.color = '#8892b0';
+            eventCount.textContent = events.length > 1 ? `(${events.length} events)` : '';
+
+            eventContent.appendChild(eventLabel);
+            eventContent.appendChild(eventCount);
+            eventRow.appendChild(eventContent);
+
+            // Add expandable details for events with meaningful data
+            if (['anthropic_request', 'openai_request', 'anthropic_response', 'openai_response'].includes(eventName)) {
+                const detailsDiv = document.createElement('div');
+                detailsDiv.style.cssText = 'display: none; margin-top: 10px;';
+
+                events.forEach(event => {
+                    const eventDetail = document.createElement('div');
+                    eventDetail.style.cssText = 'margin-top: 5px; padding: 5px; background: #161b22; border-radius: 3px;';
+
+                    const timestamp = document.createElement('div');
+                    timestamp.style.cssText = 'color: #8892b0; font-size: 0.85em; margin-bottom: 5px;';
+                    timestamp.textContent = new Date(event.timestamp * 1000).toLocaleTimeString();
+                    eventDetail.appendChild(timestamp);
+
+                    // Show body preview for request/response events
+                    const bodyAttr = event.attributes[`proxy.${eventName}.body`];
+                    if (bodyAttr) {
+                        try {
+                            const body = JSON.parse(bodyAttr);
+                            const preview = document.createElement('pre');
+                            preview.style.cssText = 'margin: 0; font-size: 0.85em; max-height: 200px; overflow-y: auto;';
+                            preview.innerHTML = syntaxHighlightJSON(JSON.stringify(body, null, 2));
+                            eventDetail.appendChild(preview);
+                        } catch (e) {
+                            const preview = document.createElement('div');
+                            preview.style.cssText = 'color: #8892b0; font-size: 0.85em;';
+                            preview.textContent = 'Unable to parse body';
+                            eventDetail.appendChild(preview);
+                        }
+                    }
+
+                    detailsDiv.appendChild(eventDetail);
+                });
+
+                eventRow.appendChild(detailsDiv);
+
+                eventRow.onclick = () => {
+                    const isExpanded = eventRow.dataset.expanded === 'true';
+                    eventRow.dataset.expanded = !isExpanded;
+                    detailsDiv.style.display = isExpanded ? 'none' : 'block';
+                    eventRow.style.background = isExpanded ? '#0d1117' : '#1a1d24';
+
+                    const arrow = eventRow.querySelector('.expand-arrow');
+                    if (arrow) {
+                        arrow.style.transform = isExpanded ? 'rotate(0deg)' : 'rotate(90deg)';
+                    }
+                };
+            } else if (eventName === 'streaming_chunk_received' && events.length > 0) {
+                // For streaming chunks, just show summary
+                const summaryDiv = document.createElement('div');
+                summaryDiv.style.cssText = 'color: #8892b0; font-size: 0.85em; margin-top: 5px;';
+                const firstChunk = events[0].attributes['proxy.streaming.chunk_index'] || 0;
+                const lastChunk = events[events.length - 1].attributes['proxy.streaming.chunk_index'] || events.length - 1;
+                summaryDiv.textContent = `Chunks ${firstChunk} - ${lastChunk}`;
+                eventRow.appendChild(summaryDiv);
+            } else if (eventName === 'exception') {
+                // For exceptions, make them expandable to show stack trace
+                const detailsDiv = document.createElement('div');
+                detailsDiv.style.cssText = 'display: none; margin-top: 10px;';
+
+                events.forEach(event => {
+                    const eventDetail = document.createElement('div');
+                    eventDetail.style.cssText = 'margin-top: 5px; padding: 10px; background: #161b22; border-radius: 3px; border-left: 3px solid #ef4444;';
+
+                    // Look for exception details in attributes
+                    const exceptionType = event.attributes['exception.type'] || 'Unknown Exception';
+                    const exceptionMsg = event.attributes['exception.message'] || 'No message';
+                    const stacktrace = event.attributes['exception.stacktrace'];
+
+                    const exceptionHeader = document.createElement('div');
+                    exceptionHeader.style.cssText = 'color: #ef4444; font-weight: 600; margin-bottom: 5px;';
+                    exceptionHeader.textContent = exceptionType;
+                    eventDetail.appendChild(exceptionHeader);
+
+                    const exceptionMessage = document.createElement('div');
+                    exceptionMessage.style.cssText = 'color: #fbbf24; margin-bottom: 10px;';
+                    exceptionMessage.textContent = exceptionMsg;
+                    eventDetail.appendChild(exceptionMessage);
+
+                    if (stacktrace) {
+                        const stackDiv = document.createElement('pre');
+                        stackDiv.style.cssText = 'margin: 0; font-family: monospace; font-size: 0.85em; color: #e5e7eb; overflow-x: auto; white-space: pre-wrap;';
+                        stackDiv.textContent = stacktrace;
+                        eventDetail.appendChild(stackDiv);
+                    }
+
+                    detailsDiv.appendChild(eventDetail);
+                });
+
+                eventRow.appendChild(detailsDiv);
+
+                // Make row red-tinted for exceptions
+                eventRow.style.borderLeft = '3px solid #ef4444';
+
+                eventRow.onclick = () => {
+                    const isExpanded = eventRow.dataset.expanded === 'true';
+                    eventRow.dataset.expanded = !isExpanded;
+                    detailsDiv.style.display = isExpanded ? 'none' : 'block';
+                    eventRow.style.background = isExpanded ? '#0d1117' : '#1a1d24';
+
+                    const arrow = eventRow.querySelector('.expand-arrow');
+                    if (arrow) {
+                        arrow.style.transform = isExpanded ? 'rotate(0deg)' : 'rotate(90deg)';
+                    }
+                };
+            }
+
+            content.appendChild(eventRow);
+        });
     }
-    
+
     details.style.display = 'block';
-    
+
     function addDetailRow(label, value) {
         const row = document.createElement('div');
         row.className = 'detail-row';
-        
+
         const labelDiv = document.createElement('div');
         labelDiv.className = 'detail-label';
         labelDiv.textContent = label;
-        
+
         const valueDiv = document.createElement('div');
         valueDiv.className = 'detail-value';
         valueDiv.textContent = value;
-        
+
         row.appendChild(labelDiv);
         row.appendChild(valueDiv);
         content.appendChild(row);
@@ -582,9 +620,7 @@ function showSpanDetails(span) {
 }
 
 function clearVisualization() {
-    document.getElementById('timeline').innerHTML = '';
-    document.getElementById('events-list').innerHTML = '';
-    document.getElementById('json-viewer').innerHTML = '';
+    document.getElementById('trace-list').innerHTML = '';
     document.getElementById('span-details').style.display = 'none';
 }
 
@@ -595,22 +631,3 @@ async function clearTraces() {
         clearVisualization();
     }
 }
-
-function exportTrace() {
-    if (!currentTrace) {
-        alert('No trace selected');
-        return;
-    }
-    
-    const blob = new Blob([JSON.stringify(currentTrace, null, 2)], {type: 'application/json'});
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `trace-${currentTrace[0].trace_id}.json`;
-    a.click();
-    URL.revokeObjectURL(url);
-}
-
-document.getElementById('trace-selector').addEventListener('change', (e) => {
-    loadTrace(e.target.value);
-});

@@ -61,12 +61,13 @@ button.active {
     border-color: #2a5298;
 }
 
-.visualization-container {
-    background: #151b2d;
-    border-radius: 10px;
-    padding: 20px;
+.trace-list-container {
+    background: #0d1117;
+    border-radius: 8px;
+    padding: 12px;
     margin-bottom: 20px;
-    min-height: 400px;
+    max-height: 600px;
+    overflow-y: auto;
 }
 
 .view-tabs {
