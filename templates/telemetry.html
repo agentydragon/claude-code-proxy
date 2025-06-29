@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Claude Code Proxy - Telemetry Viewer</title>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <link rel="stylesheet" href="/static/telemetry.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Claude Code Proxy - Telemetry Viewer</h1>
+            <p>Real-time OpenTelemetry span visualization</p>
+        </header>
+
+        <div class="controls">
+            <select id="trace-selector">
+                <option value="">Select a trace...</option>
+            </select>
+            <button onclick="refreshTraces()">Refresh</button>
+            <button onclick="clearTraces()">Clear All</button>
+            <button onclick="exportTrace()">Export JSON</button>
+            <label style="margin-left: auto;">
+                <input type="checkbox" id="auto-refresh" checked> Auto-refresh (5s)
+            </label>
+        </div>
+
+        <div class="stats" id="stats">
+            <div class="stat-card">
+                <div class="stat-value" id="total-traces">0</div>
+                <div class="stat-label">Total Traces</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" id="total-spans">0</div>
+                <div class="stat-label">Total Spans</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" id="avg-duration">0ms</div>
+                <div class="stat-label">Avg Duration</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" id="error-rate">0%</div>
+                <div class="stat-label">Error Rate</div>
+            </div>
+        </div>
+
+        <div class="view-tabs">
+            <div class="tab active" onclick="switchView('timeline')">Timeline</div>
+            <div class="tab" onclick="switchView('events')">Events</div>
+            <div class="tab" onclick="switchView('json')">Raw JSON</div>
+        </div>
+
+        <div class="visualization-container">
+            <div id="timeline-view" class="view-content">
+                <div id="timeline"></div>
+            </div>
+            <div id="events-view" class="view-content" style="display: none;">
+                <div id="events-list"></div>
+            </div>
+            <div id="json-view" class="view-content" style="display: none;">
+                <div id="json-viewer"></div>
+            </div>
+        </div>
+
+        <div class="span-details" id="span-details" style="display: none;">
+            <h3>Span Details</h3>
+            <div id="details-content"></div>
+        </div>
+    </div>
+
+    <script src="/static/telemetry.js"></script>
+</body>
+</html>
