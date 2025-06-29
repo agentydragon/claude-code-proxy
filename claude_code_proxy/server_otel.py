@@ -28,7 +28,7 @@ async def handle_anthropic_otel(
     """Handle Anthropic Messages API requests with OpenTelemetry instrumentation."""
     request_id = str(uuid.uuid4())
     tracer = get_tracer()
-    
+
     # Start span but don't use context manager yet
     span = tracer.start_span(
         "proxy_request",
@@ -36,9 +36,9 @@ async def handle_anthropic_otel(
             "proxy.request_id": request_id,
             "proxy.stream": anthropic_req.get("stream", False),
             "proxy.model": anthropic_req.get("model", "unknown"),
-        }
+        },
     )
-    
+
     try:
         logger.info(f"Received Anthropic request {request_id}")
 
@@ -51,7 +51,7 @@ async def handle_anthropic_otel(
                 "headers": dict(request_headers) if request_headers else {},
                 "body": anthropic_req,
                 "timestamp": time.time(),
-            }
+            },
         )
 
         # Process messages for reasoning blocks
@@ -65,17 +65,20 @@ async def handle_anthropic_otel(
         # Track conversation
         conversation_id = (
             dict(request_headers).get("x-conversation-id") or str(uuid.uuid4())
-            if request_headers else str(uuid.uuid4())
+            if request_headers
+            else str(uuid.uuid4())
         )
         conversation_id, is_append, append_from_index = tracker.detect_append(messages, conversation_id)
 
         # Add conversation tracking attributes
-        span.set_attributes({
-            "proxy.conversation_id": conversation_id,
-            "proxy.is_append": is_append,
-            "proxy.has_reasoning": has_reasoning,
-            "proxy.message_count": len(messages),
-        })
+        span.set_attributes(
+            {
+                "proxy.conversation_id": conversation_id,
+                "proxy.is_append": is_append,
+                "proxy.has_reasoning": has_reasoning,
+                "proxy.message_count": len(messages),
+            }
+        )
 
         # Convert to OpenAI format
         if has_reasoning and is_append:
@@ -99,7 +102,7 @@ async def handle_anthropic_otel(
                 "request_id": request_id,
                 "body": openai_request,
                 "timestamp": time.time(),
-            }
+            },
         )
 
         # Update conversation cache
@@ -113,22 +116,24 @@ async def handle_anthropic_otel(
         # Handle streaming vs non-streaming
         if anthropic_req.get("stream"):
             from .streaming_otel import stream_handler_otel
+
             # For streaming, we pass the span ownership to the handler
             # It will end the span when streaming is complete
             return StreamingResponse(
-                stream_handler_otel(openai_request, request_id, span),
-                media_type="text/event-stream"
+                stream_handler_otel(openai_request, request_id, span), media_type="text/event-stream"
             )
 
         # Non-streaming: we handle the span lifecycle here
         with trace.use_span(span, end_on_exit=True):
             # Non-streaming call
             with tracer.start_as_current_span("openai_api_call") as api_span:
-                api_span.set_attributes({
-                    "http.method": "POST",
-                    "http.url": "https://api.openai.com/v1/responses",
-                    "openai.model": openai_request.get("model", "unknown"),
-                })
+                api_span.set_attributes(
+                    {
+                        "http.method": "POST",
+                        "http.url": "https://api.openai.com/v1/responses",
+                        "openai.model": openai_request.get("model", "unknown"),
+                    }
+                )
 
                 oai_response = await client.responses.create(**openai_request)
                 oai_dict = oai_response.model_dump()
@@ -142,7 +147,7 @@ async def handle_anthropic_otel(
                     "status_code": 200,
                     "body": oai_dict,
                     "timestamp": time.time(),
-                }
+                },
             )
 
             # Convert back to Anthropic format
@@ -158,7 +163,7 @@ async def handle_anthropic_otel(
                     "headers": {},
                     "body": anthropic_response,
                     "timestamp": time.time(),
-                }
+                },
             )
 
             return JSONResponse(content=anthropic_response)

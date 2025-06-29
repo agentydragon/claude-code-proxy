@@ -41,6 +41,12 @@ class ProxyConfig(BaseModel):  # type: ignore
     # Custom mappings
     anthropic_to_openai_model: dict[str, str] = Field(default_factory=dict)
 
+    # If true, forward unknown Anthropic model names to OpenAI as-is instead of erroring
+    forward_unknown_model_names: bool = Field(
+        False,
+        description="Forward unknown Anthropic model names to OpenAI as-is",
+    )
+
     # Server settings
     host: str = Field("127.0.0.1", description="Host to bind to")
     port: int = Field(8082, description="Port to listen on")

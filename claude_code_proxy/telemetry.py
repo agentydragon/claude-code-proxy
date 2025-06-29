@@ -28,11 +28,13 @@ def setup_telemetry(service_name: str = "claude-code-proxy", service_version: st
     global tracer
 
     # Create resource attributes
-    resource = Resource.create({
-        ResourceAttributes.SERVICE_NAME: service_name,
-        ResourceAttributes.SERVICE_VERSION: service_version,
-        ResourceAttributes.DEPLOYMENT_ENVIRONMENT: os.getenv("DEPLOYMENT_ENV", "development"),
-    })
+    resource = Resource.create(
+        {
+            ResourceAttributes.SERVICE_NAME: service_name,
+            ResourceAttributes.SERVICE_VERSION: service_version,
+            ResourceAttributes.DEPLOYMENT_ENVIRONMENT: os.getenv("DEPLOYMENT_ENV", "development"),
+        }
+    )
 
     # Create tracer provider
     provider = TracerProvider(resource=resource)
@@ -43,8 +45,7 @@ def setup_telemetry(service_name: str = "claude-code-proxy", service_version: st
     if otlp_endpoint:
         # Use OTLP exporter if endpoint is configured
         otlp_exporter = OTLPSpanExporter(
-            endpoint=otlp_endpoint,
-            insecure=os.getenv("OTEL_EXPORTER_OTLP_INSECURE", "true").lower() == "true"
+            endpoint=otlp_endpoint, insecure=os.getenv("OTEL_EXPORTER_OTLP_INSECURE", "true").lower() == "true"
         )
         provider.add_span_processor(BatchSpanProcessor(otlp_exporter))
         logger.info(f"OTLP exporter configured with endpoint: {otlp_endpoint}")
@@ -102,7 +103,7 @@ def record_streaming_chunk(span: trace.Span, chunk_data: str, chunk_index: int) 
             "proxy.streaming.chunk_index": chunk_index,
             "proxy.streaming.chunk_size": len(chunk_data),
             "proxy.streaming.chunk_data": chunk_data[:1000],  # Limit size
-        }
+        },
     )
 
 

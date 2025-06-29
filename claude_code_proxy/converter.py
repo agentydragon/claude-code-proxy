@@ -26,6 +26,7 @@ def _apply_search_replace(text: str) -> str:
     """Apply configured search-replace patterns to text content."""
     for pattern, repl in CONFIG.search_replace.items():
         text = re.sub(pattern, repl, text)
+        assert isinstance(text, str)
     return text
 
 
@@ -103,8 +104,13 @@ def anthropic_to_openai_request(anthropic_req: dict[str, Any]) -> dict[str, Any]
             openai_model = fallback
             logger.warning(f"No mapping for Anthropic model '{anthropic_model}', using fallback '{fallback}'")
         else:
-            # No custom mapping -> default to original Anthropic model name
-            openai_model = anthropic_model
+            if CONFIG.forward_unknown_model_names:
+                openai_model = anthropic_model
+                logger.warning(f"No mapping for Anthropic model '{anthropic_model}', forwarding as-is")
+            else:
+                raise ValueError(
+                    f"No mapping for Anthropic model '{anthropic_model}' and forward_unknown_model_names is False"
+                )
     openai_req = {"model": openai_model}
 
     # Map system instructions if present (Anthropic 'system' → OpenAI 'instructions')

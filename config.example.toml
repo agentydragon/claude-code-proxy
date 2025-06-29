@@ -13,6 +13,10 @@ openai_api_key = "sk-...your-openai-key..."
 "claude-opus-4-*" = "gpt-4"
 "claude-3-5-*"   = "gpt-3.5-turbo"
 
+# If true, forward unknown Anthropic model names to OpenAI as-is instead of erroring
+forward_unknown_model_names = false
+
+
 # Server settings (optional)
 #host = "0.0.0.0"
 #port = 8082

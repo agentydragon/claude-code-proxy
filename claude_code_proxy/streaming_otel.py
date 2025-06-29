@@ -2,7 +2,8 @@
 
 import logging
 import time
-from typing import Any, AsyncGenerator
+from collections.abc import AsyncGenerator
+from typing import Any
 
 from fastapi import HTTPException
 from openai import AsyncOpenAI
@@ -16,13 +17,11 @@ logger = logging.getLogger(__name__)
 
 
 async def stream_handler_otel(
-    openai_request: dict[str, Any], 
-    request_id: str, 
-    parent_span: trace.Span
+    openai_request: dict[str, Any], request_id: str, parent_span: trace.Span
 ) -> AsyncGenerator[str, None]:
     """
     Stream assistant responses with OpenTelemetry instrumentation.
-    
+
     This handler takes ownership of the parent span and will end it
     when streaming is complete or on error.
     """
@@ -45,16 +44,16 @@ async def stream_handler_otel(
                     "http.url": "https://api.openai.com/v1/responses",
                     "openai.model": openai_request.get("model", "unknown"),
                     "openai.streaming": True,
-                }
+                },
             ) as streaming_span:
                 async with client.responses.with_streaming_response.create(**openai_request) as response:
                     async for line in response.iter_lines():
                         accumulated_lines.append(line)
-                        
+
                         # Record chunk as event on parent span (still open)
                         record_streaming_chunk(parent_span, line, chunk_index)
                         chunk_index += 1
-                        
+
                         yield f"{line}\n"
 
                 # Record completion of streaming
@@ -73,7 +72,7 @@ async def stream_handler_otel(
                         "lines": accumulated_lines[:100],  # Limit stored lines
                     },
                     "timestamp": time.time(),
-                }
+                },
             )
 
             # Also record the Anthropic response event (streaming format)
@@ -89,7 +88,7 @@ async def stream_handler_otel(
                         "total_chunks": chunk_index,
                     },
                     "timestamp": time.time(),
-                }
+                },
             )
 
     except Exception as e:

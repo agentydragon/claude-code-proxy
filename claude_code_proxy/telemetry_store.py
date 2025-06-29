@@ -10,6 +10,7 @@ from opentelemetry.sdk.trace import ReadableSpan, SpanProcessor
 @dataclass
 class StoredEvent:
     """Stored span event with timestamp and attributes."""
+
     name: str
     timestamp: float
     attributes: dict[str, Any]
@@ -18,6 +19,7 @@ class StoredEvent:
 @dataclass
 class StoredSpan:
     """Stored span data for visualization."""
+
     span_id: str
     trace_id: str
     parent_span_id: str | None
@@ -46,15 +48,8 @@ class StoredSpan:
             "status_code": self.status_code,
             "status_message": self.status_message,
             "attributes": self.attributes,
-            "events": [
-                {
-                    "name": e.name,
-                    "timestamp": e.timestamp,
-                    "attributes": e.attributes
-                }
-                for e in self.events
-            ],
-            "context": self.context
+            "events": [{"name": e.name, "timestamp": e.timestamp, "attributes": e.attributes} for e in self.events],
+            "context": self.context,
         }
 
 
@@ -77,8 +72,7 @@ class InMemorySpanStore:
 
         # Clean up old traces if we have too many
         if len(self._traces) > self.max_spans // 10:  # Keep ~10 spans per trace avg
-            oldest_trace = min(self._traces.keys(),
-                             key=lambda tid: min(s.start_time for s in self._traces[tid]))
+            oldest_trace = min(self._traces.keys(), key=lambda tid: min(s.start_time for s in self._traces[tid]))
             del self._traces[oldest_trace]
 
     def get_recent_spans(self, limit: int = 100) -> list[StoredSpan]:
@@ -92,11 +86,7 @@ class InMemorySpanStore:
     def get_recent_traces(self, limit: int = 10) -> dict[str, list[StoredSpan]]:
         """Get the most recent traces."""
         # Sort traces by most recent span start time
-        sorted_traces = sorted(
-            self._traces.items(),
-            key=lambda kv: max(s.start_time for s in kv[1]),
-            reverse=True
-        )
+        sorted_traces = sorted(self._traces.items(), key=lambda kv: max(s.start_time for s in kv[1]), reverse=True)
         return dict(sorted_traces[:limit])
 
     def clear(self) -> None:
@@ -123,11 +113,13 @@ class VisualizationSpanProcessor(SpanProcessor):  # type: ignore[misc]
         # Convert events
         events = []
         for event in span.events:
-            events.append(StoredEvent(
-                name=event.name,
-                timestamp=event.timestamp / 1e9,  # Convert to seconds
-                attributes=dict(event.attributes or {})
-            ))
+            events.append(
+                StoredEvent(
+                    name=event.name,
+                    timestamp=event.timestamp / 1e9,  # Convert to seconds
+                    attributes=dict(event.attributes or {}),
+                )
+            )
 
         # Calculate duration
         duration_ms = None
@@ -136,9 +128,9 @@ class VisualizationSpanProcessor(SpanProcessor):  # type: ignore[misc]
 
         # Create stored span
         stored_span = StoredSpan(
-            span_id=format(span_context.span_id, '016x'),
-            trace_id=format(span_context.trace_id, '032x'),
-            parent_span_id=format(span.parent.span_id, '016x') if span.parent else None,
+            span_id=format(span_context.span_id, "016x"),
+            trace_id=format(span_context.trace_id, "032x"),
+            parent_span_id=format(span.parent.span_id, "016x") if span.parent else None,
             name=span.name,
             start_time=span.start_time / 1e9 if span.start_time else 0,  # Convert to seconds
             end_time=span.end_time / 1e9 if span.end_time else None,
@@ -151,7 +143,7 @@ class VisualizationSpanProcessor(SpanProcessor):  # type: ignore[misc]
             context={
                 "trace_flags": span_context.trace_flags,
                 "is_remote": span_context.is_remote,
-            }
+            },
         )
 
         # Store the span
