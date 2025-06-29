@@ -10,7 +10,8 @@ Proxy server to use Anthropic clients (e.g., Claude Code) with OpenAI models by 
 - Supports both streaming and non-streaming responses
 - Configurable mapping between Anthropic model names and OpenAI models
 - Health check endpoint for monitoring
-- Detailed request/response logging for debugging
+- Comprehensive OpenTelemetry instrumentation for distributed tracing
+- Per-chunk event tracking for streaming responses
 
 ## Requirements
 
@@ -63,6 +64,12 @@ log_level = "INFO"         # one of: DEBUG, INFO, WARNING, ERROR
 - `PROXY_PORT`      (overrides `port`)
 - `LOG_LEVEL`       (overrides `log_level`)
 
+### OpenTelemetry Configuration
+
+- `OTEL_EXPORTER_OTLP_ENDPOINT` - OTLP collector endpoint (e.g., `http://localhost:4317`)
+- `OTEL_EXPORTER_OTLP_INSECURE` - Use insecure connection (default: `true`)
+- `DEPLOYMENT_ENV` - Environment name for traces (default: `development`)
+
 ## Claude Code setup
 
 Drop this in `~/.claude/settings.json`:
@@ -106,9 +113,37 @@ Point your Anthropic client (e.g., Claude Code) to the proxy:
 ANTHROPIC_BASE_URL=http://localhost:8082 claude
 ```
 
-## Logging
+## Observability
 
-All Anthropic and OpenAI requests/responses are logged (in JSONL) under the application state directory:
+### OpenTelemetry Tracing
+
+The proxy includes comprehensive distributed tracing using OpenTelemetry. Each request creates a single parent span with events for all four stages:
+
+1. **Anthropic Request** - Incoming request from Claude
+2. **OpenAI Request** - Translated request to OpenAI
+3. **OpenAI Response** - Response from OpenAI
+4. **Anthropic Response** - Translated response to Claude
+
+For streaming requests, each chunk is recorded as a separate event.
+
+Example with Jaeger:
+```bash
+# Start Jaeger
+docker run -d --name jaeger \
+  -p 16686:16686 \
+  -p 4317:4317 \
+  jaegertracing/all-in-one:latest
+
+# Configure proxy to send traces to Jaeger
+export OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4317
+claude-code-proxy
+
+# View traces at http://localhost:16686
+```
+
+### Legacy JSONL Logging
+
+For backward compatibility, JSONL logs are still written to the application state directory:
 
 - **Linux**: `~/.local/state/claude-code-proxy/logs/<timestamp>/` or `$XDG_STATE_HOME/claude-code-proxy/logs/<timestamp>/`
 - **macOS**: `~/Library/Application Support/claude-code-proxy/logs/<timestamp>/`
