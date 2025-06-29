@@ -50,6 +50,12 @@ class ProxyConfig(BaseModel):  # type: ignore
     reasoning_effort: ReasoningEffort = Field(ReasoningEffort.MEDIUM, description="Reasoning effort for o1/o3 models")
     reasoning_summary: ReasoningSummary = Field(ReasoningSummary.AUTO, description="Reasoning summary type")
 
+    # Text search-and-replace patterns applied to system, user, assistant, and thinking text
+    search_replace: dict[str, str] = Field(
+        default_factory=dict,
+        description="Mapping of regex pattern to replacement string for text content filtering and transformation",
+    )
+
     @validator("log_level")
     def validate_log_level(cls, v):
         valid_levels = ["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"]

@@ -21,3 +21,8 @@ openai_api_key = "sk-...your-openai-key..."
 # Reasoning model parameters (optional)
 # reasoning_effort = "medium"   # one of: low, medium, high
 # reasoning_summary = "auto"    # one of: none, concise, detailed, auto
+
+# Search and replace patterns (regex) to apply to system, user, assistant, and thinking text blocks
+[search_replace]
+# Example: replace all occurrences of "foo" with "bar"
+"foo" = "bar"

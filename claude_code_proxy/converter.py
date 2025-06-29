@@ -3,6 +3,7 @@
 import fnmatch
 import json
 import logging
+import re
 import uuid
 from typing import Any
 
@@ -19,6 +20,13 @@ ANTHROPIC_TO_OPENAI_MODEL: dict[str, str] = CONFIG.anthropic_to_openai_model or 
     "claude-3-5-sonnet-20241022": "gpt-4o",
     "claude-3-opus-20240229": "gpt-4o",
 }
+
+
+def _apply_search_replace(text: str) -> str:
+    """Apply configured search-replace patterns to text content."""
+    for pattern, repl in CONFIG.search_replace.items():
+        text = re.sub(pattern, repl, text)
+    return text
 
 
 def _convert_tool_call_to_function_call(tc: dict[str, Any]) -> dict[str, Any]:
@@ -101,6 +109,7 @@ def anthropic_to_openai_request(anthropic_req: dict[str, Any]) -> dict[str, Any]
 
     # Map system instructions if present (Anthropic 'system' → OpenAI 'instructions')
     if "system" in anthropic_req and (system_content := _extract_text_content(anthropic_req["system"])):
+        system_content = _apply_search_replace(system_content)
         openai_req["instructions"] = system_content
 
     # Build input array from Anthropic messages
@@ -201,7 +210,9 @@ def openai_to_anthropic_response(openai_resp: dict[str, Any]) -> dict[str, Any]:
             # Convert assistant message content
             for content_item in item.get("content", []):
                 if content_item.get("type") == "output_text":
-                    anthropic_resp["content"].append({"type": "text", "text": content_item["text"]})
+                    anthropic_resp["content"].append(
+                        {"type": "text", "text": _apply_search_replace(content_item["text"])}
+                    )
                 elif content_item.get("type") == "tool_call":
                     # Parse arguments with error handling
                     input_data = parse_json_arguments(
@@ -224,7 +235,7 @@ def openai_to_anthropic_response(openai_resp: dict[str, Any]) -> dict[str, Any]:
             )
         elif item.get("type") == "reasoning":
             # Map OpenAI reasoning to Anthropic thinking blocks
-            reasoning_content = item.get("content", "")
+            reasoning_content = _apply_search_replace(item.get("content", "") or "")
             logger.info(
                 f"[REASONING BLOCK] Received from OpenAI: {reasoning_content[:200]}{'...' if len(str(reasoning_content)) > 200 else ''}",  # noqa: E501
             )
@@ -326,11 +337,11 @@ def _convert_message_to_input(msg: dict[str, Any]) -> dict[str, Any] | None:
     # Simple text content shorthand
     raw = msg.get("content")
     if isinstance(raw, str):
-        return {"role": role, "content": raw}
+        return {"role": role, "content": _apply_search_replace(raw)}
 
     # Handle explicit text field
     if "text" in msg:
-        return {"role": role, "content": msg["text"]}
+        return {"role": role, "content": _apply_search_replace(msg["text"])}
 
     content = raw if raw is not None else []
     # Complex content blocks
@@ -344,7 +355,7 @@ def _convert_message_to_input(msg: dict[str, Any]) -> dict[str, Any] | None:
         block_type = block.get("type")
 
         if block_type == "text":
-            text_parts.append(block["text"])
+            text_parts.append(_apply_search_replace(block["text"]))
 
         elif block_type == "image":
             # Convert image to base64 URL format
@@ -369,7 +380,7 @@ def _convert_message_to_input(msg: dict[str, Any]) -> dict[str, Any] | None:
 
         elif block_type == "thinking":
             # Skip thinking blocks for now - OpenAI doesn't support reasoning in input
-            thinking_text = block.get("text", "")
+            thinking_text = _apply_search_replace(block.get("text", ""))
             logger.info(
                 f"[THINKING FILTERED] Removing from input:"
                 f" {thinking_text[:200]}"
