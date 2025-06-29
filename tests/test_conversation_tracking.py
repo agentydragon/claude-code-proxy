@@ -83,7 +83,7 @@ class TestConverterHelpers:
 class TestConversationLogic:
     def test_append_concept(self):
         # simple prefix match
-        tracker._cache.clear()
+        tracker.cache.clear()
         tracker._index.clear()
         initial_messages = [{"role": "u", "content": "1"}, {"role": "a", "content": "ok"}]
         appended_messages = initial_messages + [{"role": "u", "content": "2"}]
@@ -99,7 +99,7 @@ class TestConversationLogic:
 
     def test_detect_no_append_on_mismatch(self):
         # prefix differs -> no append
-        tracker._cache.clear()
+        tracker.cache.clear()
         tracker._index.clear()
         original_messages = [{"role": "u", "content": "A"}, {"role": "a", "content": "B"}]
         tracker.update(
@@ -115,7 +115,7 @@ class TestConversationLogic:
 
     def test_multiple_sequential_appends(self):
         # multiple updates preserve append detection
-        tracker._cache.clear()
+        tracker.cache.clear()
         tracker._index.clear()
         messages1 = [{"role": "u", "content": "1"}]
         tracker.update(
@@ -141,7 +141,7 @@ class TestConversationLogic:
 
     def test_thinking_blocks_ignored_in_append(self):
         # thinking blocks don't break append detection
-        tracker._cache.clear()
+        tracker.cache.clear()
         tracker._index.clear()
         original_messages = [
             {"role": "assistant", "content": [{"type": "thinking", "text": "X"}, {"type": "text", "text": "Y"}]}
@@ -162,7 +162,7 @@ class TestConversationLogic:
 
     def test_no_append_on_identical_messages(self):
         # identical history should not count as append
-        tracker._cache.clear()
+        tracker.cache.clear()
         tracker._index.clear()
         msgs = [{"role": "u", "content": "hi"}, {"role": "a", "content": "ok"}]
         tracker.update("c1", msgs, had_reasoning_filtered=False, original_had_reasoning=False)

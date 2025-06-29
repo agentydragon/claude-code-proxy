@@ -2,3 +2,11 @@ big_model = "o3"
 small_model = "o4-mini"
 
 openai_models = ["o3", "o4-mini"]
+
+# Test-specific model mappings without wildcards
+[anthropic_to_openai_model]
+"claude-3-opus-20240229" = "gpt-4o"
+"claude-3-5-sonnet-20241022" = "gpt-4o"
+"claude-3-5-haiku-20241022" = "gpt-4o-mini"
+"claude-opus-4-20250514" = "o3"
+"claude-sonnet-4-20250514" = "o3-mini"

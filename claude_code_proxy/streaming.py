@@ -2,6 +2,8 @@
 
 import logging
 import time
+from collections.abc import AsyncGenerator
+from typing import Any
 
 from fastapi import HTTPException
 from openai import AsyncOpenAI
@@ -13,7 +15,7 @@ config = load_config()
 logger = logging.getLogger(__name__)
 
 
-async def stream_handler(openai_request: dict, request_id: str):
+async def stream_handler(openai_request: dict[str, Any], request_id: str) -> AsyncGenerator[str, None]:
     """
     Stream assistant responses via OpenAI Python SDK's `responses.with_streaming_response`.
     See references/openai-api-docs/python-sdk-readme.md#with_streaming_response for details.
@@ -21,6 +23,7 @@ async def stream_handler(openai_request: dict, request_id: str):
     logger.debug(f"Starting stream handler for request {request_id}")
 
     try:
+        # TODO: centralize OpenAI client
         client = AsyncOpenAI(api_key=config.openai_api_key)
         accumulated_response = []
 
@@ -42,6 +45,3 @@ async def stream_handler(openai_request: dict, request_id: str):
     except Exception as e:
         logger.error("OpenAI streaming error: %s", str(e))
         raise HTTPException(status_code=500, detail=str(e)) from e
-
-
-# mypy: ignore_errors

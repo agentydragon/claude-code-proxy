@@ -50,6 +50,9 @@ class ProxyConfig(BaseModel):  # type: ignore
     # Server settings
     host: str = Field("127.0.0.1", description="Host to bind to")
     port: int = Field(8082, description="Port to listen on")
+    openai_timeout: float = Field(
+        300.0, description="Timeout for OpenAI requests in seconds; wrong format is fatal if set"
+    )
     log_level: str = Field("WARNING", description="Logging level: DEBUG, INFO, WARNING, ERROR")
 
     # Reasoning model settings
@@ -69,54 +72,34 @@ class ProxyConfig(BaseModel):  # type: ignore
             raise ValueError(f"log_level must be one of {valid_levels}")
         return v.upper()
 
-
-def find_config_path(config_file: str | None = None) -> Path:
-    """Determine path to config.toml (cwd/config.toml, cwd/config.test.toml, or XDG config)."""
-    if config_file:
-        return Path(config_file)
-    root = Path(__file__).parent.parent
-    xdg = Path(platformdirs.user_config_dir("claude-code-proxy")) / "config.toml"
-    txt = root / "config.toml"
-    tst = root / "config.test.toml"
-    candidates = [xdg, txt, tst]
-    for p in candidates:
-        logger.info(f"Config candidate: {p} exists={p.exists()}")
-    chosen = next((p for p in candidates if p.exists()), xdg)
-    logger.info(f"Selected config file: {chosen}")
-    return chosen
+    @validator("openai_timeout")
+    def validate_openai_timeout(cls, v):
+        # Ensure provided timeout is positive and correctly formatted
+        if v <= 0:
+            raise ValueError("openai_timeout must be positive")
+        return v
 
 
-def load_config(config_file: str | None = None) -> ProxyConfig:
-    """Load configuration from file, environment variables, and defaults.
-
-    Priority order:
-    1. Config file values
-    2. Environment variables
-    3. Default values
-    """
-    config_data: dict[str, Any] = {}
-    # Determine config file path and load if exists
-    config_path = find_config_path(config_file)
+def load_config() -> ProxyConfig:
+    """Load configuration from file, environment variables, and defaults."""
+    config_path = Path(platformdirs.user_config_dir("claude-code-proxy")) / "config.toml"
     logger.info(f"Loading config from: {config_path}")
+    config_data: dict[str, Any] = {}
     if config_path.exists():
         with open(config_path, "rb") as f:
             config_data = tomllib.load(f)
 
-    # Override with environment variables (only if not set in config file)
-    env_mapping = {
-        "OPENAI_API_KEY": "openai_api_key",
-        "PROXY_HOST": "host",
-        "PROXY_PORT": "port",
-        "LOG_LEVEL": "log_level",
-    }
-    for env_var, config_key in env_mapping.items():
-        if env_var in os.environ and config_key not in config_data:
-            value: str | int = os.environ[env_var]
-            if config_key == "port":
-                try:
-                    value = int(value)
-                except ValueError:
-                    continue
-            config_data[config_key] = value
+    # OpenAI API key in config takes precedence over environment variable
+    if "OPENAI_API_KEY" in os.environ and "openai_api_key" not in config_data:
+        config_data["openai_api_key"] = os.environ["OPENAI_API_KEY"]
+    # For other env vars, config file values take precedence.
+    if "PROXY_HOST" in os.environ:
+        config_data["host"] = os.environ["PROXY_HOST"]
+    if "PROXY_PORT" in os.environ:
+        config_data["port"] = int(os.environ["PROXY_PORT"])
+    if "LOG_LEVEL" in os.environ:
+        config_data["log_level"] = os.environ["LOG_LEVEL"].upper()
+    if "OPENAI_TIMEOUT" in os.environ:
+        config_data["openai_timeout"] = float(os.environ["OPENAI_TIMEOUT"])
 
     return ProxyConfig(**config_data)

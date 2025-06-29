@@ -14,16 +14,19 @@ from opentelemetry import trace
 
 from .config import load_config
 from .converter import anthropic_to_openai_request, openai_to_anthropic_response
+from .streaming_otel import stream_handler_otel
 from .telemetry import get_tracer, record_request_event, set_error_status
 from .tracking import tracker
 
 config = load_config()
-client = AsyncOpenAI(api_key=config.openai_api_key)
+# TODO: centralize owner of OpenAI client
 logger = logging.getLogger(__name__)
 
 
 async def handle_anthropic_otel(
-    anthropic_req: dict[str, Any], request_headers: Mapping[str, str] | None = None
+    anthropic_req: dict[str, Any],
+    client: AsyncOpenAI,
+    request_headers: Mapping[str, str] | None = None,
 ) -> StreamingResponse | JSONResponse:
     """Handle Anthropic Messages API requests with OpenTelemetry instrumentation."""
     request_id = str(uuid.uuid4())
@@ -84,15 +87,13 @@ async def handle_anthropic_otel(
         if has_reasoning and is_append:
             reasoning_count = tracker.count_thinking_blocks(messages)
             span.set_attribute("proxy.reasoning_blocks_preserved", reasoning_count)
-            anthropic_req_for_append = copy.deepcopy(anthropic_req)
-            anthropic_req_for_append["messages"] = messages[append_from_index:]
-            openai_request = anthropic_to_openai_request(anthropic_req_for_append)
+            anthropic_req = copy.deepcopy(anthropic_req)
+            anthropic_req["messages"] = messages[append_from_index:]
         elif has_reasoning:
             reasoning_count = tracker.count_thinking_blocks(messages)
             span.set_attribute("proxy.reasoning_blocks_filtered", reasoning_count)
-            openai_request = anthropic_to_openai_request(anthropic_req)
-        else:
-            openai_request = anthropic_to_openai_request(anthropic_req)
+
+        openai_request = anthropic_to_openai_request(anthropic_req)
 
         # Record OpenAI request
         record_request_event(
@@ -115,12 +116,10 @@ async def handle_anthropic_otel(
 
         # Handle streaming vs non-streaming
         if anthropic_req.get("stream"):
-            from .streaming_otel import stream_handler_otel
-
             # For streaming, we pass the span ownership to the handler
             # It will end the span when streaming is complete
             return StreamingResponse(
-                stream_handler_otel(openai_request, request_id, span), media_type="text/event-stream"
+                stream_handler_otel(openai_request, request_id, span, client), media_type="text/event-stream"
             )
 
         # Non-streaming: we handle the span lifecycle here
@@ -135,7 +134,8 @@ async def handle_anthropic_otel(
                     }
                 )
 
-                oai_response = await client.responses.create(**openai_request)
+                # TODO: configuration in config.toml for timeout
+                oai_response = await client.responses.create(**openai_request, timeout=config.openai_timeout)
                 oai_dict = oai_response.model_dump()
 
             # Record OpenAI response
@@ -143,8 +143,9 @@ async def handle_anthropic_otel(
                 span,
                 "openai_response",
                 {
+                    # TODO: this should be folded into a helper / one method (DRY)
                     "request_id": request_id,
-                    "status_code": 200,
+                    "status_code": 200,  # TODO: constant, doens't make sense to set
                     "body": oai_dict,
                     "timestamp": time.time(),
                 },
@@ -159,8 +160,8 @@ async def handle_anthropic_otel(
                 "anthropic_response",
                 {
                     "request_id": request_id,
-                    "status_code": 200,
-                    "headers": {},
+                    "headers": {},  # TODO: constant, doesn't make sense to set
+                    "status_code": 200,  # TODO: constant, doens't make sense to set
                     "body": anthropic_response,
                     "timestamp": time.time(),
                 },

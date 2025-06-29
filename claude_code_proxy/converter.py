@@ -88,6 +88,7 @@ def parse_json_arguments(arguments: Any, context_name: str, context_type: str = 
         }
 
 
+# TODO: this should return an OpenAI API object - not a dict
 def anthropic_to_openai_request(anthropic_req: dict[str, Any]) -> dict[str, Any]:
     """Convert Anthropic Messages API request to OpenAI Responses API format."""
     # Map Anthropic model name to OpenAI model, allowing a catch-all fallback ('*')

@@ -17,7 +17,7 @@ logger = logging.getLogger(__name__)
 
 
 async def stream_handler_otel(
-    openai_request: dict[str, Any], request_id: str, parent_span: trace.Span
+    openai_request: dict[str, Any], request_id: str, parent_span: trace.Span, client: AsyncOpenAI
 ) -> AsyncGenerator[str, None]:
     """
     Stream assistant responses with OpenTelemetry instrumentation.
@@ -31,7 +31,6 @@ async def stream_handler_otel(
     try:
         # Use the parent span context
         with trace.use_span(parent_span, end_on_exit=False):
-            client = AsyncOpenAI(api_key=config.openai_api_key)
             accumulated_lines = []
             chunk_index = 0
 
@@ -46,7 +45,10 @@ async def stream_handler_otel(
                     "openai.streaming": True,
                 },
             ) as streaming_span:
-                async with client.responses.with_streaming_response.create(**openai_request) as response:
+                # TODO: configuration in config.toml for timeout
+                async with client.responses.with_streaming_response.create(
+                    **openai_request, timeout=config.openai_timeout
+                ) as response:
                     async for line in response.iter_lines():
                         accumulated_lines.append(line)
 

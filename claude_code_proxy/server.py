@@ -7,22 +7,24 @@ import time
 from pathlib import Path
 from typing import Any
 
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
+from httpx import AsyncClient
 from openai import AsyncOpenAI
 from starlette.templating import _TemplateResponse as TemplateResponse
 
-from .config import load_config
+from .config import ProxyConfig, load_config
 from .converter import anthropic_to_openai_request
 from .logging_utils import log_dir, session_id
+from .openai_client import get_openai_client
 from .server_otel import handle_anthropic_otel
 from .telemetry import setup_telemetry
 from .telemetry_store import span_store
+from .tracking import tracker
 
 config = load_config()
-client = AsyncOpenAI(api_key=config.openai_api_key)
 
 log_level = logging._nameToLevel[config.log_level.upper()]
 logging.basicConfig(
@@ -52,23 +54,23 @@ else:
 
 
 @app.post("/v1/messages", response_model=None)  # type: ignore[misc]
-async def handle_messages(request: Request) -> StreamingResponse | JSONResponse:
+async def handle_messages(
+    request: Request, config: ProxyConfig = Depends(load_config), client: AsyncOpenAI = Depends(get_openai_client)
+) -> StreamingResponse | JSONResponse:
     """Handle Anthropic Messages API requests."""
     try:
-        return await handle_anthropic_otel(await request.json(), request.headers)
+        return await handle_anthropic_otel(await request.json(), client, request.headers)
     except Exception as e:
         logger.exception("Unexpected error")
         raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 @app.post("/v1/messages/count_tokens", response_model=None)  # type: ignore[misc]
-async def count_tokens(request: Request) -> JSONResponse:
+async def count_tokens(request: Request, config: ProxyConfig = Depends(load_config)) -> JSONResponse:
     """Handle token counting requests via the real OpenAI Tokens API."""
     body = await request.json()
     oai_req = anthropic_to_openai_request(body)
     # Call the /v1/tokens/count endpoint using HTTP client
-    from httpx import AsyncClient
-
     async with AsyncClient(headers={"Authorization": f"Bearer {config.openai_api_key}"}) as http:
         resp = await http.post("https://api.openai.com/v1/tokens/count", json=oai_req, timeout=30.0)
         resp.raise_for_status()
@@ -157,8 +159,6 @@ async def clear_telemetry() -> JSONResponse:
 @app.get("/data")  # type: ignore[misc]
 async def flow_data(session: str | None = None) -> JSONResponse:
     """Return JSON of request-response flows for the current session."""
-    from pathlib import Path
-
     logs_root = log_dir.parent
     sess = session or session_id
     dpath = Path(logs_root) / sess
@@ -217,17 +217,12 @@ async def startup_event() -> None:
     if not config.openai_api_key:
         logger.error("Configuration error: OPENAI_API_KEY not set; some endpoints may fail")
 
-    # Log conversation tracker state
-    from .tracking import tracker
-
     logger.info(f"Loaded {len(tracker.cache)} conversations from persistent cache")
 
 
 @app.on_event("shutdown")  # type: ignore[misc]
 async def shutdown_event() -> None:
     """Save state on shutdown."""
-    from .tracking import tracker
-
     tracker.save()
     logger.info("Saved conversation cache on shutdown")
 
@@ -235,4 +230,4 @@ async def shutdown_event() -> None:
 if __name__ == "__main__":
     import uvicorn
 
-    uvicorn.run(app, host="0.0.0.0", port=8001)
+    uvicorn.run(app, host=config.host, port=config.port)

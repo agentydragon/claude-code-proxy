@@ -6,7 +6,6 @@ from pathlib import Path
 import platformdirs
 import uvicorn
 
-from .config import find_config_path
 from .server import app, config
 
 
@@ -42,15 +41,9 @@ Examples:
 
     print(f"Starting Claude Code Proxy on http://{args.host}:{args.port}")
     print(f"Logs directory: {log_dir}")
-    # Show config lookup sequence (platformdirs first, then project files)
-    root = Path(__file__).parent.parent
-    xdg = Path(platformdirs.user_config_dir("claude-code-proxy")) / "config.toml"
-    txt = root / "config.toml"
-    tst = root / "config.test.toml"
-    print("Config lookup sequence:")
-    for p in (xdg, txt, tst):
-        print(f"  {p} exists={p.exists()}")
-    print("Selected config file:", find_config_path())
+    # Show config file location
+    config_path = Path(platformdirs.user_config_dir("claude-code-proxy")) / "config.toml"
+    print(f"Config file: {config_path} (exists={config_path.exists()})")
 
     # Run with specified settings
     uvicorn.run(app, host=args.host, port=args.port, log_level=args.log_level)
