@@ -190,55 +190,6 @@ async def flow_data(session: str | None = None) -> JSONResponse:
     return JSONResponse({"flows": flows})
 
 
-@app.get("/flows", response_model=None)  # type: ignore[misc]
-async def flows_page(request: Request, session: str | None = None) -> TemplateResponse:
-    """Render flow visualization page."""
-    if templates is None:
-        raise HTTPException(status_code=500, detail="Templates directory not found")
-    logs_root = log_dir.parent
-    sess = session or session_id
-    return templates.TemplateResponse(
-        "flows.html",
-        {"request": request, "session": sess, "logs_root": str(logs_root)},
-    )
-
-
-@app.get("/flows/data")  # type: ignore[misc]
-async def flows_data(session: str | None = None) -> JSONResponse:
-    """Return JSON of request-response flows for a session."""
-    from pathlib import Path
-
-    logs_root = log_dir.parent
-    sess = session or session_id
-    dpath = Path(logs_root) / sess
-    feeds: dict[str, dict[str, Any]] = {}
-
-    def load(name: str) -> list[dict[str, Any]]:
-        fpath = dpath / name
-        if not fpath.exists():
-            return []
-        with fpath.open(encoding="utf-8") as f:
-            return [json.loads(line) for line in f]
-
-    anth_req = load("anthropic_requests.jsonl")
-    oai_req = load("openai_requests.jsonl")
-    oai_resp = load("openai_responses.jsonl")
-    anth_resp = load("anthropic_responses.jsonl")
-
-    for entry in anth_req:
-        feeds.setdefault(str(entry.get("request_id")), {})["anthropic_request"] = entry
-    for entry in oai_req:
-        feeds.setdefault(str(entry.get("request_id")), {})["openai_request"] = entry
-    for entry in oai_resp:
-        feeds.setdefault(str(entry.get("request_id")), {})["openai_response"] = entry
-    for entry in anth_resp:
-        feeds.setdefault(str(entry.get("request_id")), {})["anthropic_response"] = entry
-
-    # sort by anthropic_request timestamp
-    flows = sorted(feeds.values(), key=lambda x: x.get("anthropic_request", {}).get("timestamp", 0))
-    return JSONResponse({"flows": flows})
-
-
 @app.on_event("startup")  # type: ignore[misc]
 async def startup_event() -> None:
     """Log startup information and validate configuration."""
