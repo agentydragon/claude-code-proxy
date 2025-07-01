@@ -65,6 +65,12 @@ class ProxyConfig(BaseModel):  # type: ignore
         description="Mapping of regex pattern to replacement string for text content filtering and transformation",
     )
 
+    # Append tracking settings
+    enable_append_tracking: bool = Field(
+        True,
+        description="Enable conversation append tracking to send only new messages to OpenAI (may cause context loss)",
+    )
+
     @validator("log_level")
     def validate_log_level(cls, v):
         valid_levels = ["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"]

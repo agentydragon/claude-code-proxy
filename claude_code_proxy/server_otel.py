@@ -71,7 +71,13 @@ async def handle_anthropic_otel(
             if request_headers
             else str(uuid.uuid4())
         )
-        conversation_id, is_append, append_from_index = tracker.detect_append(messages, conversation_id)
+        
+        # Only detect append if append tracking is enabled
+        if config.enable_append_tracking:
+            conversation_id, is_append, append_from_index = tracker.detect_append(messages, conversation_id)
+        else:
+            is_append = False
+            append_from_index = -1
 
         # Add conversation tracking attributes
         span.set_attributes(
@@ -84,14 +90,24 @@ async def handle_anthropic_otel(
         )
 
         # Convert to OpenAI format
-        if has_reasoning and is_append:
+        if has_reasoning and is_append and config.enable_append_tracking:
+            # Append tracking enabled: send only new messages
             reasoning_count = tracker.count_thinking_blocks(messages)
             span.set_attribute("proxy.reasoning_blocks_preserved", reasoning_count)
             anthropic_req = copy.deepcopy(anthropic_req)
             anthropic_req["messages"] = messages[append_from_index:]
+            logger.info(
+                f"Append tracking enabled: sending {len(messages[append_from_index:])} new messages "
+                f"(skipping {append_from_index} previous messages)"
+            )
         elif has_reasoning:
+            # Either not an append, or append tracking disabled: filter reasoning blocks
             reasoning_count = tracker.count_thinking_blocks(messages)
             span.set_attribute("proxy.reasoning_blocks_filtered", reasoning_count)
+            if not config.enable_append_tracking and is_append:
+                logger.info(
+                    "Append tracking disabled: sending full conversation with reasoning blocks filtered"
+                )
 
         openai_request = anthropic_to_openai_request(anthropic_req)
 
@@ -106,13 +122,14 @@ async def handle_anthropic_otel(
             },
         )
 
-        # Update conversation cache
-        tracker.update(
-            conversation_id,
-            messages,
-            had_reasoning_filtered=(has_reasoning and not is_append),
-            original_had_reasoning=has_reasoning,
-        )
+        # Update conversation cache (only if append tracking is enabled)
+        if config.enable_append_tracking:
+            tracker.update(
+                conversation_id,
+                messages,
+                had_reasoning_filtered=(has_reasoning and not is_append),
+                original_had_reasoning=has_reasoning,
+            )
 
         # Handle streaming vs non-streaming
         if anthropic_req.get("stream"):

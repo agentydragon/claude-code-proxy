@@ -26,6 +26,9 @@ forward_unknown_model_names = false
 # reasoning_effort = "medium"   # one of: low, medium, high
 # reasoning_summary = "auto"    # one of: none, concise, detailed, auto
 
+# Append tracking settings (optional)
+# enable_append_tracking = true  # Enable conversation append tracking (may cause context loss with some models)
+
 # Search and replace patterns (regex) to apply to system, user, assistant, and thinking text blocks
 [search_replace]
 # Example: replace all occurrences of "foo" with "bar"
